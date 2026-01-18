@@ -1,0 +1,12 @@
+[Unit]
+Description=Bossa RT System
+After=network.target
+
+[Service]
+Type=forking
+ExecStart=/opt/bossa/bin/bossa
+Restart=on-failure
+User=root
+
+[Install]
+WantedBy=multi-user.target
