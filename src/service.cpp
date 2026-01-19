@@ -1,3 +1,9 @@
+/*
+ *   Copyright (c) 2026 Alexandre Loeblein Heinen
+ *   All rights reserved.
+ *   Licensed under the Apache License, Version 2.0
+ */
+
 #include <chrono>
 #include <csignal>
 #include <cstdlib>

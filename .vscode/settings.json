@@ -1,0 +1,13 @@
+{
+  "licenseheader.author": "Alexandre Loeblein Heinen",
+  "licenseheader.license": "Custom",
+  "licenseheader.projectName": "bossa",
+  "licenseheader.copyrightHolder": "Alexandre Loeblein Heinen",
+  "licenseheader.customHeader": [
+    "/*",
+    " *   Copyright (c) <<year>> <<author>>",
+    " *   All rights reserved.",
+    " *   Licensed under the Apache License, Version 2.0",
+    " */"
+  ]
+}
