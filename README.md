@@ -15,18 +15,14 @@ Usage:
 ./scripts/setup.sh
 ```
 
-## Build
-
-Compile the project using CMake and create a distributable `tar.gz` archive.
-
-### Native Build
+## Native Build
 
 Usage:
 ```bash
 ./scripts/build.sh
 ```
 
-### Cross-Compilation (Raspberry Pi 5 - ARM64)
+## Cross-Compilation (Raspberry Pi 5 - ARM64)
 
 For building on an x86_64 machine for Raspberry Pi 5:
 
@@ -42,7 +38,7 @@ Output:
 Available toolchain files:
 - `toolchain-arm64.cmake` - For Raspberry Pi 5 (ARM64/aarch64)
 
-## Sync (Installation)
+### Sync (Installation)
 
 Deploy the built artifacts to a remote Raspberry Pi device via SSH. Requires SSH access to the target device.
 
@@ -59,6 +55,73 @@ Options:
 Example:
 ```bash
 ./scripts/sync.sh -t pi@192.168.1.100 -d /opt/bossa
+```
+
+## Testing (native build)
+
+After building it natively, you can test the service on your local Linux machine:
+
+Build the service:
+```bash
+./scripts/build.sh
+```
+
+Run the service in the foreground (for debugging):
+```bash
+./build/final/bin/bossa
+```
+
+Run the service as a daemon:
+```bash
+sudo ./build/final/bin/bossa
+```
+
+The service will daemonize and run in the background. Monitor the logs with:
+```bash
+sudo tail -f /var/log/syslog | grep bossa
+```
+
+Or use journalctl:
+```bash
+sudo journalctl -u bossa -f
+```
+
+Stop the running service:
+```bash
+sudo pkill -SIGTERM bossa
+```
+
+Or send an interrupt signal:
+```bash
+sudo pkill -SIGINT bossa
+```
+
+### Install as a systemd service (optional)
+
+Copy the service file:
+```bash
+sudo cp config/bossa.service /etc/systemd/system/
+sudo systemctl daemon-reload
+```
+
+Start the service:
+```bash
+sudo systemctl start bossa
+```
+
+Check status:
+```bash
+sudo systemctl status bossa
+```
+
+Stop the service:
+```bash
+sudo systemctl stop bossa
+```
+
+View logs:
+```bash
+sudo journalctl -u bossa -f
 ```
 
 ## Code Formatting
