@@ -1,1 +1,23 @@
-build
+# Build output
+build/
+
+# Compiled object files
+*.o
+*.a
+*.so
+*.d
+
+# Archives
+*.tar.gz
+*.zip
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
