@@ -4,6 +4,25 @@
 
 Bossa (Base Operating System for Sensors and Actuators) is a real-time system framework for IoT and robotics projects on ARM-based single-board computers (Raspberry Pi). It provides a production-ready foundation for building applications with hardware IO control, task priorities, telemetry, and logging capabilities.
 
+The project emphasizes modern C++20 practices, testability, and rigorous V-cycle validation for embedded systems.
+
+## Documentation Index
+
+- [Coding guidelines (authoritative)](docs/guidelines.md)
+- [Contributing guide](CONTRIBUTING.md)
+
+## Continuous Integration
+
+GitHub Actions runs the repository validation pipeline on pull request creation and updates.
+
+The workflows are defined in `.github/workflows/` and enforce the checks described in `docs/guidelines.md`:
+
+- **Formatting** (`formatting.yml`): C++ code formatting validation with clang-format
+- **Build and Test** (`build-and-test.yml`):
+  - Native build (x86_64) with unit tests (GTest)
+  - Cross-compilation for ARM64 (Raspberry Pi 5)
+  - Artifact generation for deployment
+
 ## Dependencies / Requirements
 
 Install all build and deployment dependencies on a Debian-based system.
@@ -156,3 +175,36 @@ The script automatically formats all `.cpp` and `.h` files in the `src/` and `in
    "editor.formatOnSave": true
    ```
 4. Format on save is now enabled
+
+## CI and Merge Policy
+
+GitHub Actions workflows run for pull requests and can be configured as required checks for merge protection on main.
+
+Recommended required checks:
+
+- **Formatting**: C++ formatting validation (formatting.yml)
+- **Build and Test / Native Build**: x86_64 native build (build-and-test.yml)
+- **Build and Test / Cross-Compile ARM64**: ARM64 cross-compilation (build-and-test.yml)
+
+Unit tests will be automatically run when the `tests/` directory is populated.
+
+## Contributing
+
+Before contributing, follow [CONTRIBUTING.md](CONTRIBUTING.md) and the conventions in [docs/guidelines.md](docs/guidelines.md).
+
+All contributions, including AI-assisted changes, must adhere to the V-cycle development process and pass all validation steps (native build, cross-compile, tests, format check).
+
+## References
+
+Core references for embedded C++ and Linux system programming:
+
+- Stroustrup, B. (2013). The C++ Programming Language (4th Edition). Addison-Wesley.
+- Meyers, S. (2014). Effective Modern C++. O'Reilly Media.
+- Sutter, H., & Alexandrescu, A. (2004). C++ Coding Standards. Addison-Wesley.
+- Love, R. (2013). Linux System Programming (2nd Edition). O'Reilly Media.
+- ISO/IEC 14882:2020 - Programming Languages — C++
+- C++ Core Guidelines: https://isocpp.github.io/CppCoreGuidelines/
+
+## License
+
+MIT License. See [LICENSE](LICENSE).
