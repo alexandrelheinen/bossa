@@ -96,15 +96,15 @@ jobs:
 
       - name: Verify tarball creation
         run: |
-          if [ ! -f build/final/bossa.tar.gz ]; then
+          if [ ! -f build/bossa.tar.gz ]; then
             echo "Error: bossa.tar.gz not found"
             exit 1
           fi
-          tar -tzf build/final/bossa.tar.gz | head -n 20
+          tar -tzf build/bossa.tar.gz | head -n 20
 
       - name: Upload ARM64 artifact
         uses: actions/upload-artifact@v4
         with:
           name: bossa-arm64
-          path: build/final/bossa.tar.gz
+          path: build/bossa.tar.gz
           retention-days: 7
