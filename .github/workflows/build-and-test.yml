@@ -1,0 +1,110 @@
+name: Build and Test
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+  workflow_dispatch:
+
+concurrency:
+  group: build-and-test-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  native-build:
+    name: Native Build (x86_64)
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            ninja-build
+
+      - name: Build (native x86_64)
+        run: |
+          ./scripts/build.sh
+
+      - name: Verify executable
+        run: |
+          if [ ! -f build/final/bin/bossa ]; then
+            echo "Error: bossa executable not found"
+            exit 1
+          fi
+          file build/final/bin/bossa
+          ldd build/final/bin/bossa || true
+
+      - name: Run unit tests
+        if: hashFiles('tests/**') != ''
+        run: |
+          cd build
+          ctest --output-on-failure -V
+
+      - name: Unit tests not yet implemented
+        if: hashFiles('tests/**') == ''
+        run: |
+          echo "No tests directory found. Unit tests will be added in future PRs."
+          echo "This is not a failure - the build succeeded."
+
+  cross-compile-arm64:
+    name: Cross-Compile (ARM64)
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install cross-compilation toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            ninja-build \
+            gcc-aarch64-linux-gnu \
+            g++-aarch64-linux-gnu \
+            binutils-aarch64-linux-gnu
+
+      - name: Cross-compile for ARM64
+        run: |
+          ./scripts/build.sh -t toolchain-arm64.cmake
+
+      - name: Verify ARM64 executable
+        run: |
+          if [ ! -f build/final/bin/bossa ]; then
+            echo "Error: bossa ARM64 executable not found"
+            exit 1
+          fi
+          file build/final/bin/bossa
+          echo "Expected: ELF 64-bit LSB executable, ARM aarch64"
+
+      - name: Verify tarball creation
+        run: |
+          if [ ! -f build/final/bossa.tar.gz ]; then
+            echo "Error: bossa.tar.gz not found"
+            exit 1
+          fi
+          tar -tzf build/final/bossa.tar.gz | head -n 20
+
+      - name: Upload ARM64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bossa-arm64
+          path: build/final/bossa.tar.gz
+          retention-days: 7
