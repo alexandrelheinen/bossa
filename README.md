@@ -1,6 +1,6 @@
 # bossa
 
-<img src="docs/images/bossa.svg" alt="BOSSA Logo" width="200" align="left">
+<img src="docs/images/bossa.svg" alt="BOSSA Logo" width="120" align="left">
 
 Bossa (Base Operating System for Sensors and Actuators) is a real-time system framework for IoT and robotics projects on ARM-based single-board computers (Raspberry Pi). It provides a production-ready foundation for building applications with hardware IO control, task priorities, telemetry, and logging capabilities.
 
