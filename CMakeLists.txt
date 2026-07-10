@@ -6,6 +6,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/final/bin")
 
+set(BOSSA_DAEMON_NAME bossa-daemon)
+
 include(FetchContent)
 
 FetchContent_Declare(
@@ -20,9 +22,18 @@ set(YAML_CPP_BUILD_TOOLS
     CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(yaml-cpp)
 
+FetchContent_Declare(
+    nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.3)
+FetchContent_MakeAvailable(nlohmann_json)
+
 find_package(PkgConfig QUIET)
-if(PkgConfig_FOUND AND NOT CMAKE_CROSSCOMPILING)
-  pkg_check_modules(SYSTEMD libsystemd)
+if(PkgConfig_FOUND)
+  if(NOT CMAKE_CROSSCOMPILING)
+    pkg_check_modules(SYSTEMD libsystemd)
+  endif()
+  pkg_check_modules(GPIOD libgpiod)
 endif()
 
 set(BOSSA_CORE_SOURCES
@@ -41,8 +52,47 @@ if(SYSTEMD_FOUND)
   target_include_directories(bossa_core PUBLIC ${SYSTEMD_INCLUDE_DIRS})
 endif()
 
-add_executable(bossa src/daemon_main.cpp)
-target_link_libraries(bossa PRIVATE bossa_core)
+set(BOSSA_IO_SOURCES
+    src/io/linux_i2c_bus.cpp
+    src/io/libgpiod_gpio.cpp)
+
+add_library(bossa_io STATIC ${BOSSA_IO_SOURCES})
+target_include_directories(bossa_io
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(bossa_io PUBLIC bossa_core)
+
+if(GPIOD_FOUND)
+  target_compile_definitions(bossa_io PUBLIC HAVE_LIBGPIOD)
+  target_link_libraries(bossa_io PUBLIC ${GPIOD_LIBRARIES})
+  target_include_directories(bossa_io PUBLIC ${GPIOD_INCLUDE_DIRS})
+endif()
+
+add_library(bossa_telemetry INTERFACE)
+target_include_directories(bossa_telemetry
+    INTERFACE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+set(BOSSA_DRIVERS_SOURCES
+    src/drivers/registry.cpp
+    drivers/bme280/bme280_driver.cpp)
+
+add_library(bossa_drivers STATIC ${BOSSA_DRIVERS_SOURCES})
+target_include_directories(bossa_drivers
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/drivers/bme280)
+target_link_libraries(bossa_drivers
+    PUBLIC
+        bossa_io
+        bossa_telemetry
+        nlohmann_json::nlohmann_json)
+
+add_executable(${BOSSA_DAEMON_NAME} src/daemon_main.cpp)
+target_link_libraries(${BOSSA_DAEMON_NAME}
+    PRIVATE
+        bossa_core
+        bossa_drivers)
 
 if(NOT CMAKE_CROSSCOMPILING)
   FetchContent_Declare(
@@ -59,17 +109,26 @@ if(NOT CMAKE_CROSSCOMPILING)
   add_executable(bossa_tests
       tests/core/service_test.cpp
       tests/core/config_test.cpp
-      tests/core/daemon_integration_test.cpp)
+      tests/core/daemon_integration_test.cpp
+      tests/drivers/bme280_driver_test.cpp
+      tests/mocks/mock_gpio.cpp
+      tests/mocks/mock_i2c_bus.cpp)
+
+  target_include_directories(bossa_tests
+      PRIVATE
+          ${CMAKE_CURRENT_SOURCE_DIR}/tests/mocks
+          ${CMAKE_CURRENT_SOURCE_DIR}/drivers/bme280)
 
   target_compile_definitions(bossa_tests
       PRIVATE
-          BOSSA_DAEMON_BINARY="$<TARGET_FILE:bossa>")
+          BOSSA_DAEMON_BINARY="$<TARGET_FILE:${BOSSA_DAEMON_NAME}>")
 
-  add_dependencies(bossa_tests bossa)
+  add_dependencies(bossa_tests ${BOSSA_DAEMON_NAME})
 
   target_link_libraries(bossa_tests
       PRIVATE
           bossa_core
+          bossa_drivers
           GTest::gtest_main)
 
   include(GoogleTest)

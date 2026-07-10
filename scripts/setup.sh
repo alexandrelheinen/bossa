@@ -20,6 +20,7 @@ REQUIREMENTS="build-essential \
                 clang-format \
                 libyaml-cpp-dev \
                 libsystemd-dev \
+                libgpiod-dev \
                 pkg-config"
 
 sudo apt update
