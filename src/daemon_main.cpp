@@ -4,6 +4,7 @@
  */
 
 #include <chrono>
+#include <cstdio>
 #include <cstdlib>
 #include <string>
 #include <syslog.h>
@@ -53,6 +54,13 @@ bool parse_args(int argc, char *argv[], bool *foreground,
     return true;
 }
 
+void log_config_error(bool foreground, const std::string &message) {
+    syslog(LOG_ERR, "config: %s", message.c_str());
+    if (foreground) {
+        std::fprintf(stderr, "config: %s\n", message.c_str());
+    }
+}
+
 } // namespace
 
 int main(int argc, char *argv[]) {
@@ -67,7 +75,7 @@ int main(int argc, char *argv[]) {
 
     const auto config_result = bossa::core::load_config(config_path);
     if (!config_result.ok()) {
-        syslog(LOG_ERR, "config: %s", config_result.error().c_str());
+        log_config_error(foreground, config_result.error());
         return EXIT_FAILURE;
     }
 

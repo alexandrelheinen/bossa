@@ -45,7 +45,7 @@ gantt
     Phase 0 – Foundation           :done,    p0, 2026-03, 2026-04
 
     section Core
-    Phase 1 – Core runtime         :active,  p1, 2026-07, 2026-08
+    Phase 1 – Core runtime         :done,    p1, 2026-07, 2026-08
 
     section Hardware
     Phase 2 – I/O and driver       :         p2, 2026-08, 2026-09
@@ -83,7 +83,7 @@ gantt
 
 ---
 
-## Phase 1 — Core Runtime
+## Phase 1 — Core Runtime ✅ Complete
 
 **Goal:** Harden the daemon foundation, add configuration loading, refactor the
 build into libraries, and establish the test infrastructure.
@@ -92,7 +92,7 @@ build into libraries, and establish the test infrastructure.
 
 | ID | Task | How |
 |----|------|-----|
-| 1.1 | Refactor CMake into `bossa_core` static library | Split `CMakeLists.txt`; separate `bossa-daemon` executable |
+| 1.1 | Refactor CMake into `bossa_core` static library | Split `CMakeLists.txt`; separate `bossa` executable |
 | 1.2 | Add GTest infrastructure | `tests/`, `enable_testing()`, CI runs `ctest` |
 | 1.3 | Service unit tests | Test signal handler flag, foreground mode, loop invocation count |
 | 1.4 | Foreground mode (`--foreground`) | Skip `daemonize()` for local dev and tests |
@@ -103,11 +103,11 @@ build into libraries, and establish the test infrastructure.
 
 ### Acceptance criteria
 
-- [ ] `cd build && ctest -V` passes with ≥ 5 Service/Config tests
-- [ ] `bossa-daemon --foreground` runs without forking; logs to syslog
-- [ ] Invalid YAML config → exit code 1 with `LOG_ERR` message
-- [ ] Native and ARM64 builds pass in CI
-- [ ] `./scripts/clang.sh && git diff --exit-code` clean
+- [x] `cd build && ctest -V` passes with ≥ 5 Service/Config tests
+- [x] `bossa --foreground` runs without forking; logs to syslog
+- [x] Invalid YAML config → exit code 1 with `LOG_ERR` message
+- [x] Native and ARM64 builds pass in CI
+- [x] `./scripts/clang.sh && git diff --exit-code` clean
 
 ### Estimated scope
 

@@ -121,7 +121,8 @@ Validation rules:
 | 6 | 1.6 | Implement `bossa::core::Config` | `include/bossa/core/config.hpp`, `src/core/config.cpp` |
 | 7 | 1.7 | Call `sd_notify(READY=1)` after config load | `src/core/service.cpp`, `config/bossa.service` |
 | 8 | 1.3 | Write Service and Config unit tests (≥ 5) | `tests/core/` |
-| 9 | — | Example config, update CI workflows | `config/examples/`, `.github/workflows/` |
+| 9 | — | Daemon integration tests (invalid config exit path) | `tests/core/daemon_integration_test.cpp` |
+| 10 | — | Example config, update CI workflows | `config/examples/`, `.github/workflows/` |
 
 ---
 
@@ -145,11 +146,11 @@ this phase:
 
 From [roadmap.md](roadmap.md) Phase 1:
 
-- [ ] `cd build && ctest -V` passes with ≥ 5 Service/Config tests
-- [ ] `bossa --foreground` runs without forking; logs to syslog
-- [ ] Invalid YAML config → exit code 1 with `LOG_ERR` message
-- [ ] Native and ARM64 builds pass in CI
-- [ ] `./scripts/clang.sh && git diff --exit-code` clean
+- [x] `cd build && ctest -V` passes with ≥ 5 Service/Config tests
+- [x] `bossa --foreground` runs without forking; logs to syslog
+- [x] Invalid YAML config → exit code 1 with `LOG_ERR` message
+- [x] Native and ARM64 builds pass in CI
+- [x] `./scripts/clang.sh && git diff --exit-code` clean
 
 ---
 
