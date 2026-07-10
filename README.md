@@ -1,209 +1,253 @@
-# bossa
+# BOSSA
 
 <img src="docs/images/bossa.svg" alt="BOSSA Logo" width="120" align="left">
 
-Bossa (Base Operating System for Sensors and Actuators) is a real-time system framework for IoT and robotics projects on ARM-based single-board computers (Raspberry Pi). It provides a production-ready foundation for building applications with hardware IO control, task priorities, telemetry, and logging capabilities.
+**Base Operating System for Sensors and Actuators**
 
-The project emphasizes modern C++20 practices, testability, and rigorous V-cycle validation for embedded systems.
+BOSSA is a modular C++20 framework for IoT edge devices and an accompanying server
+component that publishes telemetry to a SQL database. It targets ARM Linux
+(Raspberry Pi 5) and is designed so that new hardware drivers—especially those
+already available in C++—can be added with minimal glue code.
 
-## Documentation Index
+The edge runtime samples sensors and actuators on configurable schedules. A
+declarative sync policy selects which channels are stored locally, which are
+pushed online, and at what frequency. The server component ingests telemetry
+from one or many edge nodes and persists it to PostgreSQL.
 
-- [Coding guidelines (authoritative)](docs/guidelines.md)
-- [Contributing guide](CONTRIBUTING.md)
+## Documentation
 
-## Continuous Integration
+| Document | Purpose |
+|----------|---------|
+| [Specification](docs/specification.md) | Requirements, APIs, data model, library choices |
+| [Roadmap](docs/roadmap.md) | Phased delivery plan and acceptance criteria |
+| [Coding guidelines](docs/guidelines.md) | Authoritative C++ and V-cycle conventions |
+| [Contributing](CONTRIBUTING.md) | Build, test, deploy, and pull request workflow |
 
-GitHub Actions runs the repository validation pipeline on pull request creation and updates.
+## Architecture Overview
 
-The workflows are defined in `.github/workflows/` and enforce the checks described in `docs/guidelines.md`:
+BOSSA splits into two deployable binaries that share core libraries:
 
-- **Formatting** (`formatting.yml`): C++ code formatting validation with clang-format
-- **Build and Test** (`build-and-test.yml`):
-  - Native build (x86_64) with unit tests (GTest)
-  - Cross-compilation for ARM64 (Raspberry Pi 5)
-  - Artifact generation for deployment
-
-## Dependencies / Requirements
-
-Install all build and deployment dependencies on a Debian-based system.
-
-Usage:
-```bash
-./scripts/setup.sh
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           Edge device (Pi 5)                            │
+│                                                                         │
+│  ┌──────────┐   ┌─────────────┐   ┌──────────────┐   ┌──────────────┐  │
+│  │  Config  │──▶│   Driver    │──▶│  Telemetry   │──▶│  Sync engine │  │
+│  │  (YAML)  │   │  registry   │   │  scheduler   │   │  + buffer    │  │
+│  └──────────┘   └──────┬──────┘   └──────────────┘   └──────┬───────┘  │
+│                        │                                      │         │
+│               ┌────────┴────────┐                    ┌─────────┴───────┐ │
+│               │  bossa::io      │                    │ SQLite (local)  │ │
+│               │  GPIO I2C SPI   │                    │ offline cache   │ │
+│               └────────┬────────┘                    └─────────┬───────┘ │
+│                        │                                      │         │
+│               ┌────────┴────────┐                             │ HTTPS    │
+│               │ Driver plugins  │                             │ batch    │
+│               │ (.so / static)  │                             ▼         │
+│               └─────────────────┘                    ┌─────────────────┐  │
+│                                                    │  bossa-server   │  │
+│  bossa-daemon (systemd)                            │  or remote host │  │
+└────────────────────────────────────────────────────┴────────┬────────┴──┘
+                                                              │
+                                                     ┌────────▼────────┐
+                                                     │   PostgreSQL    │
+                                                     │  (+ TimescaleDB)│
+                                                     └─────────────────┘
 ```
 
-## Native Build
+### Edge runtime (`bossa-daemon`)
 
-Usage:
-```bash
-./scripts/build.sh
+Long-running systemd service built on `bossa::Service`. Responsibilities:
+
+- Load YAML configuration (devices, channels, sync policies).
+- Instantiate drivers through a registry (built-in or dynamically loaded `.so`).
+- Run a priority-aware scheduler that calls each driver at its configured
+  sample rate without heap allocations in the hot path.
+- Buffer samples in a pre-allocated ring buffer and flush to local SQLite when
+  the network is unavailable.
+- Push batched telemetry to `bossa-server` over HTTPS.
+
+### Server component (`bossa-server`)
+
+Standalone daemon (or container) that runs where PostgreSQL is reachable.
+Responsibilities:
+
+- Authenticate edge nodes (API key per device).
+- Accept batched telemetry over a REST API.
+- Validate, deduplicate, and insert rows into PostgreSQL.
+- Expose a health endpoint for monitoring and orchestration.
+
+The server schema is designed to align with the SQL data model used in the
+companion cloud project (private repository). BOSSA defines the edge-facing
+contract; the server maps it to the canonical database tables.
+
+## Modular Driver Model
+
+Every hardware interface implements `bossa::drivers::Driver`:
+
+```cpp
+namespace bossa::drivers {
+
+struct Sample {
+  std::string channel_id;
+  double value;
+  std::chrono::system_clock::time_point timestamp;
+  std::string unit;  // physical quantity, e.g. "celsius", not "C"
+};
+
+class Driver {
+ public:
+  virtual ~Driver() = default;
+  virtual std::string name() const = 0;
+  virtual void configure(const nlohmann::json& parameters) = 0;
+  virtual std::vector<Sample> read() = 0;
+  virtual void write(const nlohmann::json& command) = 0;
+};
+
+}  // namespace bossa::drivers
 ```
 
-## Cross-Compilation (Raspberry Pi 5 - ARM64)
+Drivers are registered in one of two ways:
 
-For building on an x86_64 machine for Raspberry Pi 5:
+1. **Static** — linked at build time via `BOSSA_REGISTER_DRIVER(MyDriver)`.
+2. **Dynamic** — compiled as a shared library (`libbossa_driver_*.so`) and
+   loaded with `dlopen` when listed in the configuration file.
 
-Build for ARM64:
-```bash
-./scripts/build.sh -t toolchain-arm64.cmake
+Wrapping an existing C++ driver library typically requires only a thin adapter
+class that translates its API into `read()` / `write()` and maps its outputs to
+`Sample` values.
+
+## Sync Policy
+
+Each channel declares independent sampling and synchronization behavior in
+configuration (see [specification](docs/specification.md) for the full schema):
+
+```yaml
+channels:
+  - id: ambient_temperature
+    driver: bme280
+    device: /dev/i2c-1
+    address: 0x76
+    sample_rate_hz: 1.0
+    sync:
+      destinations: [local, remote]
+      remote_interval_seconds: 60
+      priority: normal
+      mode: batch
 ```
 
-Output:
-- Executable: `build/final/bin/bossa` (ARM64 binary)
-- Archive: `build/final/bossa.tar.gz`
+| Field | Effect |
+|-------|--------|
+| `sample_rate_hz` | How often the driver is polled on the edge |
+| `sync.destinations` | `local` (SQLite), `remote` (server/PostgreSQL) |
+| `sync.remote_interval_seconds` | Minimum interval between uploads for this channel |
+| `sync.priority` | `critical` / `normal` / `low` — scheduler ordering under load |
+| `sync.mode` | `batch`, `realtime`, or `on_change` |
 
-Available toolchain files:
-- `toolchain-arm64.cmake` - For Raspberry Pi 5 (ARM64/aarch64)
+## Technology Stack
 
-### Sync (Installation)
+| Layer | Choice | Notes |
+|-------|--------|-------|
+| Language | C++20 | RAII, `std::chrono`, `std::optional`, concepts |
+| Build | CMake 3.16+ | Native x86_64 + ARM64 cross-compile |
+| Edge GPIO | [libgpiod](https://git.kernel.org/pub/scm/libs/libgpiod/libgpiod.git/) v2 | Character-device API, no sysfs |
+| Edge I2C / SPI | Linux `i2c-dev` / `spidev` | Kernel interfaces, zero extra dependencies |
+| Configuration | [yaml-cpp](https://github.com/jbeder/yaml-cpp) | Human-readable device and sync config |
+| JSON | [nlohmann/json](https://github.com/nlohmann/json) | Driver parameters, API payloads |
+| Local storage | [SQLite](https://www.sqlite.org/) | Offline buffer on the edge |
+| Remote database | [PostgreSQL](https://www.postgresql.org/) via [libpqxx](https://github.com/jtv/libpqxx) | Primary SQL store; TimescaleDB-compatible |
+| HTTP client | [libcurl](https://curl.se/libcurl/) | Edge-to-server telemetry upload |
+| HTTP server | [cpp-httplib](https://github.com/yhirose/cpp-httplib) | Header-only REST ingress for `bossa-server` |
+| MQTT (optional) | [Eclipse Mosquitto](https://mosquitto.org/) (`libmosquitto`) | Pub/sub bridge for external integrations |
+| Plugin loading | POSIX `dlfcn` | Dynamic driver `.so` modules |
+| Testing | [Google Test](https://github.com/google/googletest) | Unit and integration tests |
+| Logging | `syslog` | Daemon logging per embedded conventions |
+| Service manager | systemd | `Type=notify` once readiness signaling is implemented |
 
-Deploy the built artifacts to a remote Raspberry Pi device via SSH. Requires SSH access to the target device.
+## Repository Layout (target)
 
-Usage:
-```bash
-./scripts/sync.sh [-t TARGET] [-d REMOTE_DIR]
+```
+bossa/
+├── include/bossa/
+│   ├── core/          # Service, scheduler, config loader
+│   ├── io/            # GPIO, I2C, SPI abstractions
+│   ├── drivers/       # Driver interface and registry
+│   ├── telemetry/     # Sample types, ring buffer
+│   ├── storage/       # SQLite local store
+│   ├── sync/          # Upload scheduler and retry logic
+│   └── server/        # REST ingress and DB writer
+├── src/               # Implementations
+├── drivers/           # Built-in and example driver adapters
+├── server/            # bossa-server entry point
+├── tests/             # GTest suites (mirrors include/ structure)
+├── config/            # Example YAML, systemd units
+├── scripts/           # Build, format, deploy
+└── docs/              # Specification, roadmap, guidelines
 ```
 
-Options:
-- `-t TARGET`: Target device (default: `pi@raspberry.local`)
-- `-d REMOTE_DIR`: Remote directory for deployment (default: `/opt/bossa`)
-- `-h`: Show help message
+## Data Flow
 
-Example:
-```bash
-./scripts/sync.sh -t pi@192.168.1.100 -d /opt/bossa
+```mermaid
+sequenceDiagram
+    participant HW as Hardware
+    participant DR as Driver
+    participant SC as Scheduler
+    participant BUF as Ring buffer
+    participant LS as SQLite
+    participant SV as bossa-server
+    participant PG as PostgreSQL
+
+    loop every sample_rate_hz
+        SC->>DR: read()
+        DR->>HW: bus transaction
+        HW-->>DR: raw data
+        DR-->>SC: Sample[]
+        SC->>BUF: enqueue
+    end
+
+    alt local destination
+        BUF->>LS: flush batch
+    end
+
+    alt remote destination (interval elapsed)
+        BUF->>SV: POST /api/v1/telemetry
+        SV->>PG: INSERT rows
+        SV-->>BUF: 202 Accepted
+        BUF->>BUF: acknowledge / trim
+    end
+
+    Note over LS,SV: On network failure, edge retains samples in SQLite until connectivity returns.
 ```
 
-## Testing (native build)
+## Current Implementation Status
 
-After building it natively, you can test the service on your local Linux machine:
+| Component | Status |
+|-----------|--------|
+| `bossa::Service` daemon base | Implemented |
+| Sample `bossa-daemon` loop | Implemented (placeholder) |
+| Driver registry | Planned |
+| I/O abstractions (GPIO, I2C, SPI) | Planned |
+| Telemetry scheduler and buffer | Planned |
+| SQLite local store | Planned |
+| `bossa-server` REST ingress | Planned |
+| PostgreSQL writer (libpqxx) | Planned |
+| YAML configuration loader | Planned |
+| Unit tests (GTest) | Planned |
+| Dynamic driver plugins | Planned |
 
-Build the service:
+See the [roadmap](docs/roadmap.md) for the delivery sequence.
+
+## Quick Start
+
 ```bash
-./scripts/build.sh
+./scripts/setup.sh          # install build dependencies
+./scripts/build.sh            # native build (x86_64)
+./scripts/build.sh -t toolchain-arm64.cmake   # cross-compile for Pi 5
+./scripts/sync.sh -t pi@raspberry.local       # deploy to device
 ```
 
-Run the service in the foreground (for debugging):
-```bash
-./build/final/bin/bossa
-```
-
-Run the service as a daemon:
-```bash
-sudo ./build/final/bin/bossa
-```
-
-The service will daemonize and run in the background. Monitor the logs with:
-```bash
-sudo tail -f /var/log/syslog | grep bossa
-```
-
-Or use journalctl:
-```bash
-sudo journalctl -u bossa -f
-```
-
-Stop the running service:
-```bash
-sudo pkill -SIGTERM bossa
-```
-
-Or send an interrupt signal:
-```bash
-sudo pkill -SIGINT bossa
-```
-
-### Install as a systemd service (optional)
-
-Copy the service file:
-```bash
-sudo cp config/bossa.service /etc/systemd/system/
-sudo systemctl daemon-reload
-```
-
-Start the service:
-```bash
-sudo systemctl start bossa
-```
-
-Check status:
-```bash
-sudo systemctl status bossa
-```
-
-Stop the service:
-```bash
-sudo systemctl stop bossa
-```
-
-View logs:
-```bash
-sudo journalctl -u bossa -f
-```
-
-## Code Formatting
-
-The project uses **clang-format** to maintain consistent code style across C++ files. Code style is defined in `.clang-format` (LLVM style with C++20 standard).
-
-### Prerequisites:
-
-`clang-format` must be installed
-```bash
-sudo apt install clang-format
-```
-
-### Usage
-
-Format all C++ files in the project using the provided script:
-```bash
-./scripts/clang.sh
-```
-
-The script automatically formats all `.cpp` and `.h` files in the `src/` and `include/` directories.
-
-### IDE Integration (VS Code)
-
-1. Install the C/C++ extension (ms-vscode.cpptools)
-2. Install clang-format:
-   ```bash
-   sudo apt install clang-format
-   ```
-3. Configure VS Code settings:
-   ```json
-   "C_Cpp.clangFormatPath": "/usr/bin/clang-format",
-   "editor.defaultFormatter": "ms-vscode.cpptools",
-   "editor.formatOnSave": true
-   ```
-4. Format on save is now enabled
-
-## CI and Merge Policy
-
-GitHub Actions workflows run for pull requests and can be configured as required checks for merge protection on main.
-
-Recommended required checks:
-
-- **Formatting**: C++ formatting validation (formatting.yml)
-- **Build and Test / Native Build**: x86_64 native build (build-and-test.yml)
-- **Build and Test / Cross-Compile ARM64**: ARM64 cross-compilation (build-and-test.yml)
-
-Unit tests will be automatically run when the `tests/` directory is populated.
-
-## Contributing
-
-Before contributing, follow [CONTRIBUTING.md](CONTRIBUTING.md) and the conventions in [docs/guidelines.md](docs/guidelines.md).
-
-All contributions, including AI-assisted changes, must adhere to the V-cycle development process and pass all validation steps (native build, cross-compile, tests, format check).
-
-## References
-
-Core references for embedded C++ and Linux system programming:
-
-- Stroustrup, B. (2013). The C++ Programming Language (4th Edition). Addison-Wesley.
-- Meyers, S. (2014). Effective Modern C++. O'Reilly Media.
-- Sutter, H., & Alexandrescu, A. (2004). C++ Coding Standards. Addison-Wesley.
-- Love, R. (2013). Linux System Programming (2nd Edition). O'Reilly Media.
-- ISO/IEC 14882:2020 - Programming Languages — C++
-- C++ Core Guidelines: https://isocpp.github.io/CppCoreGuidelines/
+Full build, test, format, and deployment instructions are in
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

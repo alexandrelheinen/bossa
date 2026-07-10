@@ -11,13 +11,25 @@ BOSSA (Base Operating System for Sensors and Actuators) is a real-time embedded 
 ```
 bossa/
 ├── include/bossa/         ← Public headers
+│   ├── core/              ← Service, config loader, lifecycle
+│   ├── io/                ← GPIO, I2C, SPI abstractions
+│   ├── drivers/           ← Driver interface and registry
+│   ├── telemetry/         ← Sample types, ring buffer, scheduler
+│   ├── storage/           ← SQLite local store
+│   ├── sync/              ← Upload policy and retry logic
+│   └── server/            ← REST ingress and DB writer
 ├── src/                   ← Implementation files (.cpp)
+├── drivers/               ← Built-in and example driver adapters
+├── server/                ← bossa-server entry point
 ├── tests/                 ← Unit tests (GTest)
-├── config/                ← systemd service files, deployment configs
+├── config/                ← systemd units, example YAML, SQL migrations
 ├── scripts/               ← Build, deployment, and utility scripts
-├── docs/                  ← Documentation and design notes
+├── docs/                  ← Specification, roadmap, guidelines
 └── CMakeLists.txt         ← Build configuration
 ```
+
+See [specification.md](specification.md) for module responsibilities and
+[roadmap.md](roadmap.md) for the phased delivery plan.
 
 ### Header Organization
 
