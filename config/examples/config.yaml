@@ -1,0 +1,9 @@
+# Example BOSSA edge configuration (Phase 1 — top-level fields only).
+config_version: 1
+
+node:
+  id: greenhouse-sensor-01
+  api_key_file: /etc/bossa/api.key
+
+# Channels are accepted but not yet processed (Phase 3).
+channels: []

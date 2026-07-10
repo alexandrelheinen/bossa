@@ -16,7 +16,11 @@ REQUIREMENTS="build-essential \
                 rsync \
                 openssh-server \
                 gcc-aarch64-linux-gnu \
-                g++-aarch64-linux-gnu"
+                g++-aarch64-linux-gnu \
+                clang-format \
+                libyaml-cpp-dev \
+                libsystemd-dev \
+                pkg-config"
 
 sudo apt update
 sudo apt install -y ${REQUIREMENTS}

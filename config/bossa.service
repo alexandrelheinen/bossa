@@ -1,10 +1,10 @@
 [Unit]
-Description=Bossa RT System
+Description=BOSSA edge runtime
 After=network.target
 
 [Service]
-Type=forking
-ExecStart=/opt/bossa/bin/bossa
+Type=notify
+ExecStart=/opt/bossa/bin/bossa --config /etc/bossa/config.yaml
 Restart=on-failure
 User=root
 

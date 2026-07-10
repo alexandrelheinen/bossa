@@ -288,8 +288,10 @@ starts until the previous phase acceptance criteria are met.
 
 ## Immediate Next Steps (Phase 1 kickoff)
 
+Design and implementation plan: [phase-1-core-runtime.md](phase-1-core-runtime.md).
+
 1. Open GitHub issue: *"Phase 1 — Core runtime: GTest, config loader, foreground mode"*
-2. Branch: `cursor/phase-1-core-runtime-b817`
+2. Branch: `cursor/phase-1-core-runtime-e62f`
 3. Deliver items 1.1–1.8 from Phase 1
 4. PR with acceptance criteria checklist
 

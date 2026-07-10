@@ -25,11 +25,12 @@ written; this file covers *how work is planned, specified, verified, and merged*
 8. [Quality gates](#quality-gates)
 9. [Definition of Ready and Definition of Done](#definition-of-ready-and-definition-of-done)
 10. [Pull request workflow](#pull-request-workflow)
-11. [Embedded contributions](#embedded-contributions)
-12. [Raspberry Pi 5 hardware validation](#raspberry-pi-5-hardware-validation)
-13. [Rules for AI agents](#rules-for-ai-agents)
-14. [Reference documents](#reference-documents)
-15. [Pre-merge checklist](#pre-merge-checklist)
+11. [Defensive programming](#defensive-programming)
+12. [Embedded contributions](#embedded-contributions)
+13. [Raspberry Pi 5 hardware validation](#raspberry-pi-5-hardware-validation)
+14. [Rules for AI agents](#rules-for-ai-agents)
+15. [Reference documents](#reference-documents)
+16. [Pre-merge checklist](#pre-merge-checklist)
 
 ---
 
@@ -452,6 +453,95 @@ Tested on Raspberry Pi 5 with sensor at 0x76.
 
 Closes #12
 ```
+
+---
+
+## Defensive programming
+
+BOSSA runs on embedded Linux where failures are costly and hard to debug.
+**Defensive programming** means assuming inputs, hardware, and the environment
+can fail — and handling those failures explicitly at the point they occur.
+
+This section is the project-wide policy. Phase-specific notes (for example
+[docs/phase-1-core-runtime.md](docs/phase-1-core-runtime.md)) apply the same
+rules to concrete modules.
+
+### Principles
+
+| Principle | Rule | Example |
+| --- | --- | --- |
+| **Validate early** | Reject invalid config and CLI input before the main loop | `Config::load()` returns an error result; daemon exits with code 1 |
+| **Check every syscall** | Never ignore return values from POSIX calls | `if (sigaction(...) < 0) { syslog(LOG_ERR, ...); return EXIT_FAILURE; }` |
+| **Fail fast, log clearly** | On unrecoverable error: `LOG_ERR` with context, then exit or return error | Invalid YAML → `LOG_ERR` with file path and reason |
+| **No silent defaults** | Do not substitute guessed values for missing required config | Missing `node.id` is an error, not an empty string |
+| **Bound all inputs** | Reject oversize files, empty paths, and out-of-range numbers at parse time | Config file size limit; `sample_rate_hz >= 0` |
+| **Signal safety** | Handlers set only `volatile sig_atomic_t` flags | No `malloc`, `mutex`, or `syslog` inside handlers |
+| **No hot-path surprises** | No exceptions or heap allocation in `read()`, `write()`, scheduler, or signal paths | Pre-allocate buffers at `configure()` time |
+| **Test the failure paths** | Every validation rule and error branch needs a GTest | `ConfigTest.InvalidVersionReturnsError` |
+
+### Error handling by layer
+
+| Layer | Allowed mechanism | Not allowed |
+| --- | --- | --- |
+| Startup (config, CLI, daemonize) | Return codes, result types, `LOG_ERR`, `exit(1)` | Ignored errors, empty catch blocks |
+| Service main loop | Return codes, bounded retries with backoff | Exceptions, unbounded recursion |
+| Driver hot path (`read()` / `write()`) | Return codes, `SampleQuality::kBad` | Exceptions, `new` / `delete` |
+| Signal handlers | `sig_atomic_t` flag assignment only | Any other libc or C++ call |
+
+### Result types over exceptions (startup and config)
+
+Prefer explicit result types for operations that can fail during startup:
+
+```cpp
+// bossa::core::ConfigLoadResult — success carries Config, failure carries message
+auto result = bossa::core::load_config(path);
+if (!result.ok()) {
+  syslog(LOG_ERR, "config: %s", result.error().c_str());
+  return EXIT_FAILURE;
+}
+```
+
+Exceptions are acceptable in test code and in one-time initialization that is
+not on a real-time path, but production daemon startup should be provably
+fail-fast without relying on catch-all handlers.
+
+### Logging on error
+
+- Use `syslog(LOG_ERR, ...)` for errors that stop or degrade the service.
+- Include **what** failed and **why** (file path, syscall name, validation rule).
+- Do not log secrets (API keys, connection strings with passwords).
+- Use `LOG_WARNING` for recoverable conditions (retry, skipped sample).
+- Use `LOG_DEBUG` for verbose diagnostics; disabled in production builds when
+  appropriate.
+
+### RAII and resource cleanup
+
+- Open file descriptors and syslog in RAII wrappers or dedicated setup/teardown
+  functions with a single exit path.
+- Close FDs on all error branches — prefer early `return` after cleanup over
+  deep nesting.
+- Destructors must not throw.
+
+### Unit-test requirements for defensive code
+
+When adding validation or error handling:
+
+1. Add a GTest that triggers the failure (missing field, bad version, syscall
+   failure simulated via injection or test doubles).
+2. Assert the observable outcome: exit code, error message, or returned error
+   type — not only that the code "does not crash".
+3. Reference the roadmap phase or `FR-*` id in the test comment when asserting
+   specified behavior.
+
+### Agent checklist
+
+Before marking defensive work complete:
+
+- [ ] Every new syscall or library call checks its return value.
+- [ ] Every new config field has a validation rule and a failing test.
+- [ ] Signal handlers remain async-signal-safe.
+- [ ] No secrets in log messages.
+- [ ] Error paths are covered by GTest (not only the happy path).
 
 ---
 
