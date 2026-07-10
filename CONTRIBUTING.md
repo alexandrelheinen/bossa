@@ -89,6 +89,15 @@ sudo systemctl status bossa
 sudo journalctl -u bossa -f
 ```
 
+## Project Documentation
+
+| Document | Purpose |
+|----------|---------|
+| [README.md](README.md) | Architecture overview and technology stack |
+| [docs/specification.md](docs/specification.md) | Technical requirements, APIs, library choices |
+| [docs/roadmap.md](docs/roadmap.md) | Phased delivery plan and acceptance criteria |
+| [docs/guidelines.md](docs/guidelines.md) | C++ coding conventions and V-cycle |
+
 ## Coding Rules
 
 The authoritative coding standard is [docs/guidelines.md](docs/guidelines.md).
