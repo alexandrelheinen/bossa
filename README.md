@@ -18,10 +18,10 @@ from one or many edge nodes and persists it to PostgreSQL.
 
 | Document | Purpose |
 |----------|---------|
+| [Contributing](CONTRIBUTING.md) | Development constitution: SDD, V-cycle, quality gates, agent policy |
 | [Specification](docs/specification.md) | Requirements, APIs, data model, library choices |
 | [Roadmap](docs/roadmap.md) | Phased delivery plan and acceptance criteria |
-| [Coding guidelines](docs/guidelines.md) | Authoritative C++ and V-cycle conventions |
-| [Contributing](CONTRIBUTING.md) | Build, test, deploy, and pull request workflow |
+| [Coding guidelines](docs/guidelines.md) | Authoritative C++ and embedded conventions |
 
 ## Architecture Overview
 
@@ -246,7 +246,7 @@ See the [roadmap](docs/roadmap.md) for the delivery sequence.
 ./scripts/sync.sh -t pi@raspberry.local       # deploy to device
 ```
 
-Full build, test, format, and deployment instructions are in
+Full build, test, format, deploy, and contribution workflow are in
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License

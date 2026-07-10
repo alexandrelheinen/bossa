@@ -184,29 +184,15 @@ BOSSA uses **C++20**. Follow modern C++ idioms:
 
 ## 6. Testing
 
+Development workflow, SDD, and the 4-level V-cycle are defined in
+[CONTRIBUTING.md](../CONTRIBUTING.md). **Do not duplicate** that material here.
+This section covers C++ testing conventions only.
+
 ### V-Cycle Mandate
 
-Tests must be defined **at the same time** as the code they cover (V-cycle). They should be created before moving on to the next task.
-
-An imperative order (do, implement, make, add...) is not only about writing the code. It must include all the V-cycle.
-
-### Respect the V-cycle
-
-All work must include all the descending and ascending steps of the cycle. For each row numbered below, the two actions (descend and ascend) must be done **at the same time**:
-
-1. **Documentation and acceptance criteria**: Document the work/feature in GitHub issues or PR comments. Include goals, objectives, and acceptance criteria that can be verified.
-
-2. **Architecture and functional tests**: Implement the architecture (classes, public interface, file organization, dependencies) and functional unit tests **at the same time**. Testing must come first: the performance of the algorithm is independent of its implementation. By reading the acceptance criteria, you must already know which values to expect.
-
-3. **Implementation and fine testing**: Fill the stubs from the architecture definition. Implement algorithms, data structures, and private utilities. Add unit testing for private functions (fine testing).
-
-4. **Test execution and validation**: Run the tests aiming for 100% coverage (at least 90%). If this step fails, go back to step 2: review architecture and functional tests.
-
-5. **Integration and documentation**: If all tests pass:
-   - Test on target hardware (cross-compile and deploy to Raspberry Pi if possible)
-   - Update documentation for the newly implemented feature
-   - Ensure all workflows pass (build, format checks, tests)
-   - If something is wrong, go back to step 1
+Tests must be defined **at the same time** as the code they cover. An imperative
+order (do, implement, make, add…) always includes the full V-cycle described in
+[CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ### C++ Testing Framework
 
@@ -355,18 +341,19 @@ Before finishing **any** implementation task, all of the following must pass loc
 cd build && ctest -V
 
 # 3. Code formatting — zero issues
-./scripts/clang.sh
-git diff --exit-code  # Verify no formatting changes needed
+bash scripts/check/formatting.sh
 
 # 4. Cross-compile for ARM64
 ./scripts/build.sh -t toolchain-arm64.cmake
 
-# 5. (Optional) Deploy and smoke test on Raspberry Pi
+# 5. (Optional) Deploy and smoke test on Raspberry Pi 5
 ./scripts/sync.sh -t pi@raspberry.local
 ssh pi@raspberry.local 'sudo systemctl restart bossa && sleep 2 && sudo systemctl status bossa'
 ```
 
-All GitHub workflow checks (build, format, tests) must pass before opening or merging a pull request.
+Or run all gates at once: `bash scripts/check/pre_push.sh`
+
+Full workflow and agent policy: [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ## 12. Git and Version Control
 
