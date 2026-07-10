@@ -58,7 +58,14 @@ if(NOT CMAKE_CROSSCOMPILING)
 
   add_executable(bossa_tests
       tests/core/service_test.cpp
-      tests/core/config_test.cpp)
+      tests/core/config_test.cpp
+      tests/core/daemon_integration_test.cpp)
+
+  target_compile_definitions(bossa_tests
+      PRIVATE
+          BOSSA_DAEMON_BINARY="$<TARGET_FILE:bossa>")
+
+  add_dependencies(bossa_tests bossa)
 
   target_link_libraries(bossa_tests
       PRIVATE

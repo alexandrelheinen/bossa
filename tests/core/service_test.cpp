@@ -16,84 +16,83 @@
 namespace {
 
 class CountingService : public bossa::core::Service {
- public:
-  explicit CountingService(bossa::core::ServiceOptions options = {})
-      : bossa::core::Service("test-service", options) {}
+  public:
+    explicit CountingService(bossa::core::ServiceOptions options = {})
+        : bossa::core::Service("test-service", options) {}
 
-  void loop() override { loop_count_.fetch_add(1); }
+    void loop() override { loop_count_.fetch_add(1); }
 
-  int loop_count() const { return loop_count_.load(); }
+    int loop_count() const { return loop_count_.load(); }
 
- private:
-  std::atomic<int> loop_count_{0};
+  private:
+    std::atomic<int> loop_count_{0};
 };
 
-}  // namespace
+} // namespace
 
 // FR-CFG-01 / Phase 1.3 — Service runs loop in foreground mode.
 TEST(ServiceTest, ForegroundModeInvokesLoop) {
-  bossa::core::ServiceOptions options;
-  options.foreground = true;
+    bossa::core::ServiceOptions options;
+    options.foreground = true;
 
-  CountingService service(options);
-  std::thread worker([&service]() { service.start(); });
+    CountingService service(options);
+    std::thread worker([&service]() { service.start(); });
 
-  const auto deadline = std::chrono::steady_clock::now() +
-                        std::chrono::milliseconds(500);
-  while (service.loop_count() < 2 &&
-         std::chrono::steady_clock::now() < deadline) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-  }
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+    while (service.loop_count() < 2 &&
+           std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
 
-  bossa::core::Service::request_stop();
-  worker.join();
+    bossa::core::Service::request_stop();
+    worker.join();
 
-  EXPECT_GE(service.loop_count(), 2);
+    EXPECT_GE(service.loop_count(), 2);
 }
 
 // Phase 1.3 — request_stop clears the running flag.
 TEST(ServiceTest, RequestStopEndsLoop) {
-  bossa::core::ServiceOptions options;
-  options.foreground = true;
+    bossa::core::ServiceOptions options;
+    options.foreground = true;
 
-  CountingService service(options);
-  EXPECT_TRUE(bossa::core::Service::is_running());
+    CountingService service(options);
+    EXPECT_TRUE(bossa::core::Service::is_running());
 
-  std::thread worker([&service]() { service.start(); });
-  std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    std::thread worker([&service]() { service.start(); });
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
-  bossa::core::Service::request_stop();
-  worker.join();
+    bossa::core::Service::request_stop();
+    worker.join();
 
-  EXPECT_FALSE(bossa::core::Service::is_running());
+    EXPECT_FALSE(bossa::core::Service::is_running());
 }
 
 // Phase 1.5 — SIGTERM sets the stop flag (sigaction handler).
 TEST(ServiceTest, SigtermStopsService) {
-  bossa::core::ServiceOptions options;
-  options.foreground = true;
+    bossa::core::ServiceOptions options;
+    options.foreground = true;
 
-  CountingService service(options);
-  std::thread worker([&service]() { service.start(); });
+    CountingService service(options);
+    std::thread worker([&service]() { service.start(); });
 
-  std::this_thread::sleep_for(std::chrono::milliseconds(50));
-  ASSERT_EQ(std::raise(SIGTERM), 0);
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    ASSERT_EQ(std::raise(SIGTERM), 0);
 
-  worker.join();
-  EXPECT_FALSE(bossa::core::Service::is_running());
+    worker.join();
+    EXPECT_FALSE(bossa::core::Service::is_running());
 }
 
 // Phase 1.4 — foreground services do not require daemon parent exit.
 TEST(ServiceTest, ForegroundStartReturnsSuccess) {
-  bossa::core::ServiceOptions options;
-  options.foreground = true;
+    bossa::core::ServiceOptions options;
+    options.foreground = true;
 
-  CountingService service(options);
-  std::thread worker([&service]() {
-    EXPECT_EQ(service.start(), EXIT_SUCCESS);
-  });
+    CountingService service(options);
+    std::thread worker(
+        [&service]() { EXPECT_EQ(service.start(), EXIT_SUCCESS); });
 
-  std::this_thread::sleep_for(std::chrono::milliseconds(30));
-  bossa::core::Service::request_stop();
-  worker.join();
+    std::this_thread::sleep_for(std::chrono::milliseconds(30));
+    bossa::core::Service::request_stop();
+    worker.join();
 }

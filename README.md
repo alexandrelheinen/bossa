@@ -224,9 +224,9 @@ sequenceDiagram
 | Component | Status |
 |-----------|--------|
 | `bossa::core::Service` daemon base | Implemented (`bossa::core`) |
-| Sample `bossa-daemon` loop | Implemented (placeholder heartbeat) |
+| Sample `bossa` loop | Implemented (placeholder heartbeat) |
 | YAML configuration loader | Implemented (Phase 1 stub) |
-| Unit tests (GTest) | Implemented (9 tests) |
+| Unit tests (GTest) | Implemented (Service, Config, daemon integration) |
 | Driver registry | Planned |
 | I/O abstractions (GPIO, I2C, SPI) | Planned |
 | Telemetry scheduler and buffer | Planned |
