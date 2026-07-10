@@ -595,18 +595,25 @@ deployment.
 
 ### Standard smoke procedure
 
+See **[docs/hardware/pi5-bme280-smoke-test.md](docs/hardware/pi5-bme280-smoke-test.md)**
+for BME280 wiring, datasheet links, and the Phase 2 poll harness.
+
 ```bash
-# On development host
+# On development host — unit tests (local, not CI)
+./scripts/test/unit.sh
+
+# Cross-compile and deploy
 ./scripts/build.sh -t toolchain-arm64.cmake
 ./scripts/sync.sh -t pi@raspberry.local
 
-# On Pi (SSH)
-sudo cp /opt/bossa/bossa.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl restart bossa
-sudo journalctl -u bossa -n 30 --no-pager
+# Pi 5 BME280 smoke (from dev host over SSH)
+./scripts/test/pi5_bme280_smoke.sh --target pi@raspberry.local
 
-# Foreground debug (no daemon fork)
+# On Pi — foreground BME280 poll (~1 Hz syslog)
+sudo /opt/bossa/bin/bossa-bme280-smoke --foreground --bus /dev/i2c-1 --address 0x76
+sudo journalctl -t bossa-bme280-smoke -f
+
+# Daemon sanity check (config + heartbeat loop)
 sudo /opt/bossa/bin/bossa-daemon --foreground
 ```
 
@@ -614,7 +621,7 @@ sudo /opt/bossa/bin/bossa-daemon --foreground
 
 | Change type | Evidence |
 | --- | --- |
-| Driver | Correct sample values in syslog; matches datasheet or known reference |
+| Driver | Correct sample values in syslog; see [Pi 5 BME280 smoke test](docs/hardware/pi5-bme280-smoke-test.md) |
 | Scheduler | Samples arrive at configured `sample_rate_hz` (±10%) |
 | Sync / upload | Row appears in PostgreSQL `telemetry_points` table |
 | Offline mode | Disconnect network; samples in SQLite; reconnect; rows uploaded |
