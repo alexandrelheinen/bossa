@@ -39,6 +39,7 @@ jobs:
             ninja-build \
             libyaml-cpp-dev \
             libsystemd-dev \
+            libgpiod-dev \
             pkg-config
 
       - name: Build (native x86_64)
@@ -47,12 +48,12 @@ jobs:
 
       - name: Verify executable
         run: |
-          if [ ! -f build/final/bin/bossa ]; then
-            echo "Error: bossa executable not found"
+          if [ ! -f build/final/bin/bossa-daemon ]; then
+            echo "Error: bossa-daemon executable not found"
             exit 1
           fi
-          file build/final/bin/bossa
-          ldd build/final/bin/bossa || true
+          file build/final/bin/bossa-daemon
+          ldd build/final/bin/bossa-daemon || true
 
       - name: Run unit tests
         run: |
@@ -81,6 +82,7 @@ jobs:
             binutils-aarch64-linux-gnu \
             libyaml-cpp-dev \
             libsystemd-dev \
+            libgpiod-dev \
             pkg-config
 
       - name: Cross-compile for ARM64
@@ -89,11 +91,11 @@ jobs:
 
       - name: Verify ARM64 executable
         run: |
-          if [ ! -f build/final/bin/bossa ]; then
-            echo "Error: bossa ARM64 executable not found"
+          if [ ! -f build/final/bin/bossa-daemon ]; then
+            echo "Error: bossa-daemon ARM64 executable not found"
             exit 1
           fi
-          file build/final/bin/bossa
+          file build/final/bin/bossa-daemon
           echo "Expected: ELF 64-bit LSB executable, ARM aarch64"
 
       - name: Verify tarball creation

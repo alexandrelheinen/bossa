@@ -44,7 +44,8 @@ bool parse_args(int argc, char *argv[], bool *foreground,
             }
             *config_path = argv[++i];
         } else if (arg == "--help" || arg == "-h") {
-            syslog(LOG_INFO, "usage: bossa [--foreground] [--config PATH]");
+            syslog(LOG_INFO,
+                   "usage: bossa-daemon [--foreground] [--config PATH]");
             return false;
         } else {
             syslog(LOG_ERR, "unknown argument: %s", arg.c_str());

@@ -224,9 +224,11 @@ sequenceDiagram
 | Component | Status |
 |-----------|--------|
 | `bossa::core::Service` daemon base | Implemented (`bossa::core`) |
-| Sample `bossa` loop | Implemented (placeholder heartbeat) |
+| `bossa::io` GPIO / I2C abstractions | Implemented (libgpiod + Linux i2c-dev) |
+| `bossa::drivers` registry + BME280 | Implemented (mock-tested) |
+| `bossa-daemon` edge binary | Implemented (renamed from `bossa`) |
 | YAML configuration loader | Implemented (Phase 1 stub) |
-| Unit tests (GTest) | Implemented (Service, Config, daemon integration) |
+| Unit tests (GTest) | Implemented (core + driver + integration) |
 | Driver registry | Planned |
 | I/O abstractions (GPIO, I2C, SPI) | Planned |
 | Telemetry scheduler and buffer | Planned |

@@ -60,7 +60,7 @@ echo "Deploying artifact on the target device..."
 ssh "${TARGET}" << EOF
     sudo mkdir -p "${REMOTE_DIR}"
     sudo tar xzf "/tmp/${PROJECT_NAME}.tar.gz" -C "${REMOTE_DIR}"
-    sudo chmod +x "${REMOTE_DIR}/bin/${PROJECT_NAME}"
+    sudo chmod +x "${REMOTE_DIR}/bin/${DAEMON_NAME}"
     sudo rm "/tmp/${PROJECT_NAME}.tar.gz"
 EOF
 

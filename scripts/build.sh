@@ -45,7 +45,7 @@ BUILD_DIR="${PROJECT_DIR}/build"
 mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
 cmake ${CMAKE_ARGS} ..
 make -j$(nproc)
-chmod +x "${BUILD_DIR}/final/bin/${PROJECT_NAME}"
+chmod +x "${BUILD_DIR}/final/bin/${DAEMON_NAME}"
 ARTIFACT_PATH="${BUILD_DIR}/${PROJECT_NAME}.tar.gz"
 tar czf ${ARTIFACT_PATH} -C ${BUILD_DIR}/final bin
 echo "Build completed"

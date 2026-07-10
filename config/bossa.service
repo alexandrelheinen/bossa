@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=notify
-ExecStart=/opt/bossa/bin/bossa --config /etc/bossa/config.yaml
+ExecStart=/opt/bossa/bin/bossa-daemon --config /etc/bossa/config.yaml
 Restart=on-failure
 User=root
 

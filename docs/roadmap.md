@@ -48,7 +48,7 @@ gantt
     Phase 1 – Core runtime         :done,    p1, 2026-07, 2026-08
 
     section Hardware
-    Phase 2 – I/O and driver       :         p2, 2026-08, 2026-09
+    Phase 2 – I/O and driver       :active,  p2, 2026-08, 2026-09
 
     section Pipeline
     Phase 3 – Telemetry pipeline   :         p3, 2026-09, 2026-10
@@ -286,14 +286,14 @@ starts until the previous phase acceptance criteria are met.
 
 ---
 
-## Immediate Next Steps (Phase 1 kickoff)
+## Immediate Next Steps (Phase 2 kickoff)
 
-Design and implementation plan: [phase-1-core-runtime.md](phase-1-core-runtime.md).
+Design and implementation plan: [phase-2-io-driver.md](phase-2-io-driver.md).
 
-1. Open GitHub issue: *"Phase 1 — Core runtime: GTest, config loader, foreground mode"*
-2. Branch: `cursor/phase-1-core-runtime-e62f`
-3. Deliver items 1.1–1.8 from Phase 1
-4. PR with acceptance criteria checklist
+1. Open GitHub issue: *"Phase 2 — I/O abstractions and BME280 driver"*
+2. Branch: `cursor/phase-2-io-driver-fc33`
+3. Deliver items 2.1–2.9 from Phase 2
+4. PR with acceptance criteria checklist; Pi 5 smoke test documented for human execution
 
 ---
 
