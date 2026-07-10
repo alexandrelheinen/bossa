@@ -33,7 +33,10 @@ jobs:
           sudo apt-get install -y \
             build-essential \
             cmake \
-            ninja-build
+            ninja-build \
+            libyaml-cpp-dev \
+            libsystemd-dev \
+            pkg-config
 
       - name: Build (native x86_64)
         run: |
@@ -49,16 +52,9 @@ jobs:
           ldd build/final/bin/bossa || true
 
       - name: Run unit tests
-        if: hashFiles('tests/**') != ''
         run: |
           cd build
           ctest --output-on-failure -V
-
-      - name: Unit tests not yet implemented
-        if: hashFiles('tests/**') == ''
-        run: |
-          echo "No tests directory found. Unit tests will be added in future PRs."
-          echo "This is not a failure - the build succeeded."
 
   cross-compile-arm64:
     name: Cross-Compile (ARM64)
@@ -79,7 +75,10 @@ jobs:
             ninja-build \
             gcc-aarch64-linux-gnu \
             g++-aarch64-linux-gnu \
-            binutils-aarch64-linux-gnu
+            binutils-aarch64-linux-gnu \
+            libyaml-cpp-dev \
+            libsystemd-dev \
+            pkg-config
 
       - name: Cross-compile for ARM64
         run: |

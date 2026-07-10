@@ -223,16 +223,16 @@ sequenceDiagram
 
 | Component | Status |
 |-----------|--------|
-| `bossa::Service` daemon base | Implemented |
-| Sample `bossa-daemon` loop | Implemented (placeholder) |
+| `bossa::core::Service` daemon base | Implemented (`bossa::core`) |
+| Sample `bossa-daemon` loop | Implemented (placeholder heartbeat) |
+| YAML configuration loader | Implemented (Phase 1 stub) |
+| Unit tests (GTest) | Implemented (9 tests) |
 | Driver registry | Planned |
 | I/O abstractions (GPIO, I2C, SPI) | Planned |
 | Telemetry scheduler and buffer | Planned |
 | SQLite local store | Planned |
 | `bossa-server` REST ingress | Planned |
 | PostgreSQL writer (libpqxx) | Planned |
-| YAML configuration loader | Planned |
-| Unit tests (GTest) | Planned |
 | Dynamic driver plugins | Planned |
 
 See the [roadmap](docs/roadmap.md) for the delivery sequence.
