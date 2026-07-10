@@ -29,10 +29,8 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(nlohmann_json)
 
 find_package(PkgConfig QUIET)
-if(PkgConfig_FOUND)
-  if(NOT CMAKE_CROSSCOMPILING)
-    pkg_check_modules(SYSTEMD libsystemd)
-  endif()
+if(PkgConfig_FOUND AND NOT CMAKE_CROSSCOMPILING)
+  pkg_check_modules(SYSTEMD libsystemd)
   pkg_check_modules(GPIOD libgpiod)
 endif()
 

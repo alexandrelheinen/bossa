@@ -81,8 +81,6 @@ jobs:
             g++-aarch64-linux-gnu \
             binutils-aarch64-linux-gnu \
             libyaml-cpp-dev \
-            libsystemd-dev \
-            libgpiod-dev \
             pkg-config
 
       - name: Cross-compile for ARM64
