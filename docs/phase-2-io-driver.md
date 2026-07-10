@@ -114,18 +114,30 @@ From [roadmap.md](roadmap.md) Phase 2:
 
 ## Pi 5 hardware smoke test (manual)
 
-1. Wire BME280 to I2C1 (`/dev/i2c-1`) at address `0x76` or `0x77`.
-2. Deploy with `./scripts/sync.sh -t pi@<host>`.
-3. Add a channel entry to `/etc/bossa/config.yaml` (scheduler wiring lands in
-   Phase 3; for now invoke the driver via a temporary foreground harness or
-   extend the daemon loop).
-4. Run: `sudo /opt/bossa/bin/bossa-daemon --foreground --config /etc/bossa/config.yaml`
-5. Confirm syslog shows temperature readings approximately every second.
+Full guide: **[docs/hardware/pi5-bme280-smoke-test.md](hardware/pi5-bme280-smoke-test.md)** (datasheet,
+wiring, where to buy, tutorials).
+
+Quick start after deploy:
+
+```bash
+# Dev host — unit tests (GTest, not CI)
+./scripts/test/unit.sh
+
+# Dev host — Pi smoke over SSH
+./scripts/test/pi5_bme280_smoke.sh --target pi@raspberry.local
+
+# Pi — poll BME280 every 1 s via syslog
+sudo /opt/bossa/bin/bossa-bme280-smoke --foreground --bus /dev/i2c-1 --address 0x76
+```
+
+Phase 2 acceptance: temperature logged ~every second via syslog. Channel polling
+inside `bossa-daemon` arrives in Phase 3; use `bossa-bme280-smoke` until then.
 
 ---
 
 ## Related documents
 
 - [Roadmap — Phase 2](roadmap.md#phase-2--io-abstractions-and-first-driver)
+- [Pi 5 BME280 smoke test](hardware/pi5-bme280-smoke-test.md)
 - [Specification — driver interface](specification.md#7-driver-interface)
 - [Specification — hardware I/O](specification.md#42-hardware-io-edge)

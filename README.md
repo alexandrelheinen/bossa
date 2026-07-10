@@ -228,7 +228,7 @@ sequenceDiagram
 | `bossa::drivers` registry + BME280 | Implemented (mock-tested) |
 | `bossa-daemon` edge binary | Implemented (renamed from `bossa`) |
 | YAML configuration loader | Implemented (Phase 1 stub) |
-| Unit tests (GTest) | Implemented (core + driver + integration) |
+| Unit tests (GTest) | Implemented — `./scripts/test/unit.sh` |
 | Driver registry | Planned |
 | I/O abstractions (GPIO, I2C, SPI) | Planned |
 | Telemetry scheduler and buffer | Planned |

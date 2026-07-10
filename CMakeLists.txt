@@ -92,6 +92,9 @@ target_link_libraries(${BOSSA_DAEMON_NAME}
         bossa_core
         bossa_drivers)
 
+add_executable(bossa-bme280-smoke src/tools/bme280_smoke_main.cpp)
+target_link_libraries(bossa-bme280-smoke PRIVATE bossa_drivers)
+
 if(NOT CMAKE_CROSSCOMPILING)
   FetchContent_Declare(
       googletest
