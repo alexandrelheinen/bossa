@@ -105,3 +105,44 @@ TEST(ConfigTest, RejectsMissingFile) {
     EXPECT_FALSE(result.ok());
     EXPECT_NE(result.error().find("not found"), std::string::npos);
 }
+
+// Phase 3.4 — channel and sync fields are parsed.
+TEST(ConfigTest, LoadsChannelsAndSync) {
+    const auto path = write_temp_config(R"(
+config_version: 1
+node:
+  id: test-node-01
+  api_key_file: /etc/bossa/api.key
+server:
+  url: https://telemetry.example.com
+  max_batch_size: 100
+local_storage:
+  path: /tmp/bossa-test.db
+channels:
+  - id: ambient_temperature
+    driver: bme280
+    parameters:
+      bus: /dev/i2c-1
+      address: 0x76
+    sample_rate_hz: 1.0
+    sync:
+      destinations: [local, remote]
+      remote_interval_seconds: 60
+      priority: normal
+      mode: batch
+)");
+
+    const auto result = bossa::core::load_config(path);
+    ASSERT_TRUE(result.ok()) << result.error();
+    EXPECT_EQ(result.value().server.url, "https://telemetry.example.com");
+    EXPECT_EQ(result.value().server.max_batch_size, 100);
+    ASSERT_EQ(result.value().channels.size(), 1u);
+    EXPECT_EQ(result.value().channels[0].id, "ambient_temperature");
+    EXPECT_EQ(result.value().channels[0].driver, "bme280");
+    EXPECT_DOUBLE_EQ(result.value().channels[0].sample_rate_hz, 1.0);
+    EXPECT_TRUE(result.value().channels[0].sync.destination_remote);
+    EXPECT_EQ(result.value().channels[0].sync.mode,
+              bossa::telemetry::SyncMode::kBatch);
+
+    remove_if_exists(path);
+}

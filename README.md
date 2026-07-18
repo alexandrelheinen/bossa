@@ -45,13 +45,13 @@ BOSSA splits into two deployable binaries that share core libraries:
 │               │ Driver plugins  │                             │ batch    │
 │               │ (.so / static)  │                             ▼         │
 │               └─────────────────┘                    ┌─────────────────┐  │
-│                                                    │  bossa-server   │  │
-│  bossa-daemon (systemd)                            │  or remote host │  │
+│                                                    │ Cloudflare      │  │
+│  bossa-daemon (systemd)                            │ Worker + D1     │  │
 └────────────────────────────────────────────────────┴────────┬────────┴──┘
                                                               │
                                                      ┌────────▼────────┐
-                                                     │   PostgreSQL    │
-                                                     │  (+ TimescaleDB)│
+                                                     │  Cloudflare D1  │
+                                                     │ (SQLite remote) │
                                                      └─────────────────┘
 ```
 
@@ -65,21 +65,18 @@ Long-running systemd service built on `bossa::Service`. Responsibilities:
   sample rate without heap allocations in the hot path.
 - Buffer samples in a pre-allocated ring buffer and flush to local SQLite when
   the network is unavailable.
-- Push batched telemetry to `bossa-server` over HTTPS.
+- Push batched telemetry to a remote HTTPS endpoint (`server.url`) via
+  `POST /api/v1/telemetry`.
 
-### Server component (`bossa-server`)
+### Remote ingress (Cloudflare Worker + D1)
 
-Standalone daemon (or container) that runs where PostgreSQL is reachable.
-Responsibilities:
+Preferred Phase 4 path: a Cloudflare Worker accepts the same REST contract and
+writes to **D1**, reusing the existing Cloudflare SQL stack instead of running a
+separate PostgreSQL service. An optional C++ `bossa-server` remains a fallback
+only if D1 limits block the deployment.
 
-- Authenticate edge nodes (API key per device).
-- Accept batched telemetry over a REST API.
-- Validate, deduplicate, and insert rows into PostgreSQL.
-- Expose a health endpoint for monitoring and orchestration.
-
-The server schema is designed to align with the SQL data model used in the
-companion cloud project (private repository). BOSSA defines the edge-facing
-contract; the server maps it to the canonical database tables.
+BOSSA owns the edge-facing upload contract; the Worker maps batches into D1
+tables aligned with the companion cloud project.
 
 ## Modular Driver Model
 

@@ -114,10 +114,11 @@ mocks and hardware tests run on the Pi.
 | Layer | Library | Rationale |
 |-------|---------|-----------|
 | Edge local buffer | **SQLite 3** (`libsqlite3-dev`) | Single-file, zero-config, survives power loss; ideal offline queue |
-| Remote primary store | **PostgreSQL** via **libpqxx 7.x** | Full SQL; matches companion cloud project; TimescaleDB extension available for time-series |
+| Remote primary store | **Cloudflare D1** (SQLite) via Worker | Same Cloudflare platform as the companion cloud stack; no extra DB service |
+| Remote fallback (optional) | PostgreSQL via libpqxx | Only if D1 limits or Freshy schema require it |
 
 SQLite on the edge is a **transient buffer**, not the system of record. The
-server's PostgreSQL instance is authoritative.
+remote D1 database (behind a Worker) is authoritative for uploaded telemetry.
 
 **Rejected alternatives:**
 
@@ -125,7 +126,7 @@ server's PostgreSQL instance is authoritative.
 |-------------|-----------------|
 | InfluxDB | Not SQL; incompatible with companion cloud schema |
 | MongoDB | Document store; user requires relational SQL model |
-| Raw libpq (C) | libpqxx provides safer C++ RAII wrappers |
+| Standalone PostgreSQL as default | Multiplies services when Cloudflare D1 already covers SQL needs |
 | LevelDB / RocksDB | Key-value; poor fit for time-series SQL queries |
 
 ### 4.4 Networking
@@ -133,8 +134,8 @@ server's PostgreSQL instance is authoritative.
 | Concern | Library | Rationale |
 |---------|---------|-----------|
 | HTTP client (edge upload) | **libcurl** | Mature, supports TLS, retries, timeouts |
-| HTTP server (ingress) | **cpp-httplib** | Header-only C++11; sufficient for REST ingress; no Boost dependency |
-| TLS | OpenSSL (via curl / httplib) | System library on Debian/Raspberry Pi OS |
+| HTTP server (ingress) | **Cloudflare Worker** | Hosts `POST /api/v1/telemetry`; writes D1 |
+| TLS | OpenSSL (via curl); Worker edge TLS | System library on Debian/Raspberry Pi OS |
 | MQTT bridge (optional, Phase 5) | **libmosquitto** | Standard IoT pub/sub for integrations that expect MQTT |
 
 **Rejected alternatives:**
@@ -144,6 +145,7 @@ server's PostgreSQL instance is authoritative.
 | Boost.Beast | Heavy dependency for embedded targets |
 | gRPC | Overkill for batched telemetry; larger binary |
 | Custom socket code | Reinvents TLS, retry, and parsing |
+| C++ cpp-httplib server as default | Prefer Worker on existing Cloudflare account |
 
 ### 4.5 Driver Plugins
 
@@ -163,11 +165,13 @@ bossa::
 ├── drivers::       Driver base class, registry, plugin loader
 ├── telemetry::     Sample, Channel, RingBuffer, Scheduler
 ├── storage::       LocalStore (SQLite), schema migrations
-├── sync::          UploadPolicy, RetryQueue, HttpUploader
-└── server::        RestIngress, AuthMiddleware, PgWriter
+└── sync::          UploadPolicy, RetryQueue, HttpUploader (edge → Worker/D1)
 ```
 
 Namespace mirrors directory structure per [guidelines](guidelines.md).
+
+> **Note:** A C++ `bossa::server` / `bossa-server` binary is an optional fallback.
+> The preferred remote path is a Cloudflare Worker writing to D1.
 
 ---
 
@@ -578,10 +582,11 @@ target_link_libraries(bossa-server PRIVATE bossa_server_lib ...)
 
 | Topic | Current lean | Decision needed by |
 |-------|-------------|-------------------|
-| TimescaleDB vs plain PostgreSQL | Start plain; add hypertable in Phase 4 | Phase 4 start |
+| Remote store platform | **Cloudflare Worker + D1** (not C++ PostgreSQL) | Decided for Phase 4 |
+| Config hot-reload (`SIGHUP`) | Yes, reload channels without restart | Phase 3 (implementing) |
 | MQTT bridge priority | Phase 5, optional | Phase 5 planning |
-| Config hot-reload (`SIGHUP`) | Yes, reload channels without restart | Phase 3 |
-| Multi-tenancy on server | Single-tenant v1; schema supports `tenant_id` column later | Before production deploy |
+| Multi-tenancy on ingress | Single-tenant v1; add `tenant_id` later if needed | Before production deploy |
+| D1 vs Durable Object SQLite | D1 for shared telemetry table; DO only if per-node isolation needed | Phase 4 design |
 
 ---
 

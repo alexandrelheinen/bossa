@@ -83,6 +83,40 @@ TEST(ServiceTest, SigtermStopsService) {
     EXPECT_FALSE(bossa::core::Service::is_running());
 }
 
+// Phase 3.9 — SIGHUP invokes reload().
+TEST(ServiceTest, SighupInvokesReload) {
+    class ReloadService : public bossa::core::Service {
+      public:
+        ReloadService()
+            : bossa::core::Service("reload-service",
+                                   bossa::core::ServiceOptions{true}) {}
+        void loop() override {
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        void reload() override { reload_count_.fetch_add(1); }
+        int reload_count() const { return reload_count_.load(); }
+
+      private:
+        std::atomic<int> reload_count_{0};
+    };
+
+    ReloadService service;
+    std::thread worker([&service]() { service.start(); });
+    std::this_thread::sleep_for(std::chrono::milliseconds(30));
+
+    ASSERT_EQ(std::raise(SIGHUP), 0);
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+    while (service.reload_count() < 1 &&
+           std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+
+    bossa::core::Service::request_stop();
+    worker.join();
+    EXPECT_GE(service.reload_count(), 1);
+}
+
 // Phase 1.4 — foreground services do not require daemon parent exit.
 TEST(ServiceTest, ForegroundStartReturnsSuccess) {
     bossa::core::ServiceOptions options;
