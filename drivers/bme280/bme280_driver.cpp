@@ -254,3 +254,5 @@ float Bme280Driver::compensate_humidity(std::int32_t raw_humidity,
 BOSSA_REGISTER_DRIVER(Bme280Driver, "bme280");
 
 } // namespace bossa::drivers
+
+void bossa_force_link_bme280_driver() {}

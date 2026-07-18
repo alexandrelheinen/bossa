@@ -1,0 +1,57 @@
+name: Cleanup test telemetry
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Where to delete reserved test-node data
+        required: true
+        type: choice
+        options:
+          - d1-sql-preview
+          - d1-wrangler
+      d1_database:
+        description: D1 database name (required for d1-wrangler)
+        required: false
+        default: bossa-telemetry
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    name: Wipe reserved test node
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show reserved identity
+        run: |
+          echo "Reserved node id: bossa-test-00000000"
+          bash scripts/ops/cleanup_test_telemetry.sh d1-sql
+
+      - name: Preview only (default)
+        if: ${{ inputs.target == 'd1-sql-preview' }}
+        run: |
+          echo "Preview mode — no remote changes."
+          echo "Enable d1-wrangler + Cloudflare secrets when Phase 4 D1 exists."
+
+      - name: Install wrangler
+        if: ${{ inputs.target == 'd1-wrangler' }}
+        run: npm install -g wrangler
+
+      - name: Execute D1 cleanup
+        if: ${{ inputs.target == 'd1-wrangler' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "${CLOUDFLARE_API_TOKEN}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID}" ]; then
+            echo "Missing CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID secrets."
+            echo "Falling back to SQL preview:"
+            bash scripts/ops/cleanup_test_telemetry.sh d1-sql
+            exit 1
+          fi
+          bash scripts/ops/cleanup_test_telemetry.sh d1-wrangler "${{ inputs.d1_database }}"

@@ -229,6 +229,7 @@ sequenceDiagram
 | Telemetry scheduler + ring buffer | Implemented (Phase 3) |
 | Edge SQLite local store | Implemented (Phase 3) |
 | Upload policy + HTTP uploader | Implemented (Phase 3; mockable client) |
+| `TelemetryRuntime` + `sim` driver | Implemented (Phase 3 pipeline) |
 | Unit tests (GTest) | Implemented — `./scripts/test/unit.sh` |
 | BOSSA Worker + D1 ingress | Planned (Phase 4) |
 | Dynamic driver plugins | Planned (Phase 5) |
