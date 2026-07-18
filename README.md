@@ -4,15 +4,16 @@
 
 **Base Operating System for Sensors and Actuators**
 
-BOSSA is a modular C++20 framework for IoT edge devices and an accompanying server
-component that publishes telemetry to a SQL database. It targets ARM Linux
-(Raspberry Pi 5) and is designed so that new hardware drivers—especially those
-already available in C++—can be added with minimal glue code.
+BOSSA is a modular C++20 framework for IoT edge devices that publishes telemetry
+to SQLite: a local offline buffer on the device, and a remote Cloudflare D1
+database via a BOSSA Worker. It targets ARM Linux (Raspberry Pi 5) and is
+designed so that new hardware drivers—especially those already available in
+C++—can be added with minimal glue code.
 
 The edge runtime samples sensors and actuators on configurable schedules. A
 declarative sync policy selects which channels are stored locally, which are
-pushed online, and at what frequency. The server component ingests telemetry
-from one or many edge nodes and persists it to PostgreSQL.
+pushed online, and at what frequency. A Cloudflare Worker ingests telemetry
+from one or many edge nodes and persists it to D1 (SQLite).
 
 ## Documentation
 
@@ -25,7 +26,8 @@ from one or many edge nodes and persists it to PostgreSQL.
 
 ## Architecture Overview
 
-BOSSA splits into two deployable binaries that share core libraries:
+BOSSA’s edge binary shares core libraries with the upload path; remote ingress
+is a Cloudflare Worker writing D1 (not a second SQL engine):
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -70,13 +72,12 @@ Long-running systemd service built on `bossa::Service`. Responsibilities:
 
 ### Remote ingress (Cloudflare Worker + D1)
 
-Preferred Phase 4 path: a Cloudflare Worker accepts the same REST contract and
-writes to **D1**, reusing the existing Cloudflare SQL stack instead of running a
-separate PostgreSQL service. An optional C++ `bossa-server` remains a fallback
-only if D1 limits block the deployment.
+Phase 4 path: a **BOSSA** Cloudflare Worker accepts `POST /api/v1/telemetry` and
+writes to a BOSSA-owned **D1** (SQLite) database. The stack is SQLite end to
+end: edge local file + remote D1.
 
-BOSSA owns the edge-facing upload contract; the Worker maps batches into D1
-tables aligned with the companion cloud project.
+BOSSA owns the edge-facing upload contract and the D1 schema subset used for
+telemetry; companion projects may read the same D1 data or mirror it.
 
 ## Modular Driver Model
 
@@ -136,7 +137,7 @@ channels:
 | Field | Effect |
 |-------|--------|
 | `sample_rate_hz` | How often the driver is polled on the edge |
-| `sync.destinations` | `local` (SQLite), `remote` (server/PostgreSQL) |
+| `sync.destinations` | `local` (edge SQLite), `remote` (Worker → D1) |
 | `sync.remote_interval_seconds` | Minimum interval between uploads for this channel |
 | `sync.priority` | `critical` / `normal` / `low` — scheduler ordering under load |
 | `sync.mode` | `batch`, `realtime`, or `on_change` |
@@ -152,10 +153,10 @@ channels:
 | Configuration | [yaml-cpp](https://github.com/jbeder/yaml-cpp) | Human-readable device and sync config |
 | JSON | [nlohmann/json](https://github.com/nlohmann/json) | Driver parameters, API payloads |
 | Local storage | [SQLite](https://www.sqlite.org/) | Offline buffer on the edge |
-| Remote database | [PostgreSQL](https://www.postgresql.org/) via [libpqxx](https://github.com/jtv/libpqxx) | Primary SQL store; TimescaleDB-compatible |
-| HTTP client | [libcurl](https://curl.se/libcurl/) | Edge-to-server telemetry upload |
-| HTTP server | [cpp-httplib](https://github.com/yhirose/cpp-httplib) | Header-only REST ingress for `bossa-server` |
-| MQTT (optional) | [Eclipse Mosquitto](https://mosquitto.org/) (`libmosquitto`) | Pub/sub bridge for external integrations |
+| Remote database | [Cloudflare D1](https://developers.cloudflare.com/d1/) (SQLite) | Authoritative remote store |
+| HTTP client | [libcurl](https://curl.se/libcurl/) | Edge → Worker telemetry upload |
+| HTTP ingress | Cloudflare Worker | `POST /api/v1/telemetry` → D1 |
+| MQTT (optional, Phase 5) | [Eclipse Mosquitto](https://mosquitto.org/) (`libmosquitto`) | Pub/sub bridge; parked for now |
 | Plugin loading | POSIX `dlfcn` | Dynamic driver `.so` modules |
 | Testing | [Google Test](https://github.com/google/googletest) | Unit and integration tests |
 | Logging | `syslog` | Daemon logging per embedded conventions |
@@ -170,12 +171,12 @@ bossa/
 │   ├── io/            # GPIO, I2C, SPI abstractions
 │   ├── drivers/       # Driver interface and registry
 │   ├── telemetry/     # Sample types, ring buffer
-│   ├── storage/       # SQLite local store
-│   ├── sync/          # Upload scheduler and retry logic
-│   └── server/        # REST ingress and DB writer
+│   ├── storage/       # Edge SQLite local store
+│   ├── sync/          # Upload policy and HTTP uploader
+│   └── telemetry/     # Sample, ring buffer, scheduler
 ├── src/               # Implementations
 ├── drivers/           # Built-in and example driver adapters
-├── server/            # bossa-server entry point
+├── workers/           # (Phase 4) Cloudflare Worker + D1 migrations
 ├── tests/             # GTest suites (mirrors include/ structure)
 ├── config/            # Example YAML, systemd units
 ├── scripts/           # Build, format, deploy
@@ -190,9 +191,9 @@ sequenceDiagram
     participant DR as Driver
     participant SC as Scheduler
     participant BUF as Ring buffer
-    participant LS as SQLite
-    participant SV as bossa-server
-    participant PG as PostgreSQL
+    participant LS as Edge SQLite
+    participant WK as BOSSA Worker
+    participant D1 as Cloudflare D1
 
     loop every sample_rate_hz
         SC->>DR: read()
@@ -207,32 +208,31 @@ sequenceDiagram
     end
 
     alt remote destination (interval elapsed)
-        BUF->>SV: POST /api/v1/telemetry
-        SV->>PG: INSERT rows
-        SV-->>BUF: 202 Accepted
+        BUF->>WK: POST /api/v1/telemetry
+        WK->>D1: INSERT rows
+        WK-->>BUF: 202 Accepted
         BUF->>BUF: acknowledge / trim
     end
 
-    Note over LS,SV: On network failure, edge retains samples in SQLite until connectivity returns.
+    Note over LS,WK: On network failure, edge retains samples in local SQLite until connectivity returns.
 ```
 
 ## Current Implementation Status
 
 | Component | Status |
 |-----------|--------|
-| `bossa::core::Service` daemon base | Implemented (`bossa::core`) |
+| `bossa::core::Service` daemon base | Implemented |
 | `bossa::io` GPIO / I2C abstractions | Implemented (libgpiod + Linux i2c-dev) |
-| `bossa::drivers` registry + BME280 | Implemented (mock-tested) |
-| `bossa-daemon` edge binary | Implemented (renamed from `bossa`) |
-| YAML configuration loader | Implemented (Phase 1 stub) |
+| `bossa::drivers` registry + BME280 | Implemented (mock-tested; Pi smoke paused) |
+| `bossa-daemon` edge binary | Implemented |
+| YAML configuration loader | Implemented (channels + sync) |
+| Telemetry scheduler + ring buffer | Implemented (Phase 3) |
+| Edge SQLite local store | Implemented (Phase 3) |
+| Upload policy + HTTP uploader | Implemented (Phase 3; mockable client) |
 | Unit tests (GTest) | Implemented — `./scripts/test/unit.sh` |
-| Driver registry | Planned |
-| I/O abstractions (GPIO, I2C, SPI) | Planned |
-| Telemetry scheduler and buffer | Planned |
-| SQLite local store | Planned |
-| `bossa-server` REST ingress | Planned |
-| PostgreSQL writer (libpqxx) | Planned |
-| Dynamic driver plugins | Planned |
+| BOSSA Worker + D1 ingress | Planned (Phase 4) |
+| Dynamic driver plugins | Planned (Phase 5) |
+| MQTT bridge | Optional / parked (Phase 5) |
 
 See the [roadmap](docs/roadmap.md) for the delivery sequence.
 

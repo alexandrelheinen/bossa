@@ -18,8 +18,8 @@ BOSSA becomes the standard edge-and-server stack for IoT deployments in the
 Alexandre Loeblein Heinen project ecosystem:
 
 - **Edge:** plug in C++ drivers, declare what to sample and sync, deploy to Pi.
-- **Server:** ingest telemetry, write to PostgreSQL, feed the companion cloud
-  SQL project.
+- **Cloud:** ingest telemetry via a BOSSA Cloudflare Worker into D1 (SQLite),
+  for companion apps to consume.
 - **Modular:** new hardware is a driver adapter, not a fork of the framework.
 
 ---
@@ -32,7 +32,7 @@ Alexandre Loeblein Heinen project ecosystem:
 | 1 | Core runtime | Tested Service, config, scheduler | Phase 0 |
 | 2 | I/O and first driver | GPIO/I2C abstractions + one real sensor | Phase 1 |
 | 3 | Telemetry pipeline | Ring buffer, SQLite, sync policy | Phase 2 |
-| 4 | Server and database | REST ingress, PostgreSQL writer | Phase 3 |
+| 4 | Worker and D1 | REST ingress, D1 (SQLite) writer | Phase 3 |
 | 5 | Plugins and integrations | Dynamic drivers, MQTT bridge, cloud alignment | Phase 4 |
 
 ```mermaid
@@ -189,13 +189,12 @@ available again; Phase 3 proceeds without it. Smoke guide remains
 
 ## Phase 4 — Remote Ingress (Cloudflare Worker + D1)
 
-**Goal:** Accept batched telemetry from edge nodes into the existing Cloudflare
-SQL stack (D1), without standing up a separate PostgreSQL service.
+**Goal:** Accept batched telemetry from edge nodes into a **BOSSA-owned**
+Cloudflare Worker + D1 (SQLite) database.
 
-**Lean (July 2026):** Prefer **Cloudflare Workers + D1** over C++ `bossa-server` +
-PostgreSQL so the companion cloud project and BOSSA share one platform. The edge
-upload contract (`POST /api/v1/telemetry`) is unchanged; only the remote
-implementation moves.
+**Decision (July 2026):** Remote store is **SQLite only** via D1. The edge upload
+contract (`POST /api/v1/telemetry`) is unchanged; Phase 4 implements the Worker
+and D1 schema.
 
 ### Work items
 
@@ -207,7 +206,6 @@ implementation moves.
 | 4.4 | Idempotent insert | Replay-safe unique key; ignore duplicates |
 | 4.5 | Edge upload integration | Point `server.url` at Worker; real `HttpUploader` batches |
 | 4.6 | End-to-end test | Mock Worker or `wrangler dev` + curl from edge tests |
-| 4.7 | (Optional fallback) | Keep C++ `bossa-server` + PostgreSQL only if D1 limits block |
 
 ### Acceptance criteria
 
@@ -219,8 +217,8 @@ implementation moves.
 
 ### Estimated scope
 
-Worker TypeScript (or companion repo) + D1 migrations; edge side is mostly config.
-Former C++ server stack is optional fallback, not the default path.
+BOSSA Worker TypeScript under `workers/` + D1 migrations; edge side is mostly
+config (`server.url`).
 
 ---
 
@@ -239,7 +237,7 @@ companion cloud SQL project.
 | 5.4 | Schema alignment with cloud project | Add columns/tables required by private repo |
 | 5.5 | SPI bus abstraction | `bossa::io::SpiBus` for SPI sensors |
 | 5.6 | GPIO output driver | Actuator control via `write()` |
-| 5.7 | Debian packaging | `.deb` for `bossa-daemon` and `bossa-server` |
+| 5.7 | Debian packaging | `.deb` for `bossa-daemon` |
 | 5.8 | Documentation pass | Update all docs to reflect implemented state |
 
 ### Acceptance criteria
@@ -301,7 +299,7 @@ Design and implementation plan: [phase-3-telemetry-pipeline.md](phase-3-telemetr
 1. Branch: `cursor/phase-3-telemetry-pipeline-ae3a`
 2. Deliver items 3.1–3.9 (GTest; no Pi required)
 3. Leave Phase 2 Pi smoke as a follow-up when hardware is available
-4. Phase 4: Cloudflare Worker + D1 ingress (not C++ PostgreSQL by default)
+4. Phase 4: BOSSA Cloudflare Worker + D1 ingress (SQLite only)
 
 ---
 
@@ -310,7 +308,7 @@ Design and implementation plan: [phase-3-telemetry-pipeline.md](phase-3-telemetr
 | Risk | Impact | Mitigation |
 |------|--------|------------|
 | libgpiod v2 API differences on Pi OS | Driver fails on hardware | Pin libgpiod version in setup.sh; test on Bookworm |
-| PostgreSQL not available on edge | Scope creep | SQLite is edge-only; PostgreSQL is server-only |
+| Remote store drift to other engines | Scope creep | SQLite only: edge file + D1; no second SQL engine |
 | Cloud schema changes in private repo | Integration breakage | Define stable `telemetry_points` contract; version API |
 | Cross-compile dependency drift | ARM64 build fails | CI cross-compile job on every PR |
 | Driver library license conflicts | Cannot ship | Prefer MIT/BSD drivers; isolate GPL in `.so` |

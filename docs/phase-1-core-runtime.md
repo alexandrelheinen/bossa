@@ -1,5 +1,7 @@
 # Phase 1 — Core Runtime
 
+**Status:** Complete (merged). Channels/sync parsing arrived in Phase 3.
+
 This document describes the **architecture**, **implementation steps**, and **design
 patterns** for Phase 1 of the BOSSA roadmap. It is the spec-anchored design
 companion to [roadmap.md](roadmap.md) § Phase 1.
@@ -85,7 +87,7 @@ node:
   id: greenhouse-sensor-01
   api_key_file: /etc/bossa/api.key
 
-channels: []   # accepted but not yet processed
+channels: []   # Phase 1 stub; full parsing in Phase 3
 ```
 
 Validation rules:

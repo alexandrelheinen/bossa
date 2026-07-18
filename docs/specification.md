@@ -19,9 +19,9 @@ behavioral requirements (what to build).
    for the hardware.
 3. Offer a **declarative sync policy** so each channel independently defines
    what data is stored locally, what is uploaded, and at what frequency.
-4. Ship a **server component** that ingests telemetry from edge nodes and
-   persists it to a **SQL database** (PostgreSQL), aligned with the companion
-   cloud data model.
+4. Ship a **Cloudflare Worker** that ingests telemetry from edge nodes and
+   persists it to **D1 (SQLite)**, using plain SQLite end to end (edge file +
+   remote D1).
 5. Operate reliably **offline**: buffer on the edge, replay when connectivity
    returns.
 6. Maintain **testability** through interface abstractions and GTest coverage.
@@ -40,17 +40,17 @@ behavioral requirements (what to build).
 
 ```
                     ┌──────────────────────────────────┐
-                    │  Companion cloud project (SQL)   │
+                    │  Companion apps (optional)       │
                     │  dashboards, analytics, alerts   │
                     └───────────────┬──────────────────┘
                                     │ reads
                            ┌────────▼────────┐
-                           │   PostgreSQL    │
-                           │  TimescaleDB    │
+                           │ Cloudflare D1   │
+                           │ (SQLite remote) │
                            └────────▲────────┘
                                     │ writes
                            ┌────────┴────────┐
-                           │  bossa-server   │
+                           │  BOSSA Worker   │
                            │  REST ingress   │
                            └────────▲────────┘
                                     │ HTTPS (batched JSON)
@@ -65,22 +65,23 @@ behavioral requirements (what to build).
          actuators             actuators              actuators
 ```
 
-BOSSA owns the edge runtime and the telemetry ingress server. The companion
-cloud project (private repository) owns the canonical SQL schema, analytics, and
-operator-facing services. BOSSA's PostgreSQL tables are a **subset** that the
-cloud project can extend with views, aggregates, and foreign keys.
+BOSSA owns the edge runtime, the Worker ingress, and the D1 telemetry schema.
+Companion projects may read the same D1 database for analytics. **SQLite is the
+only SQL engine:** local file on the edge, D1 in the cloud.
 
 ---
 
 ## 3. Deployable Artifacts
 
-| Binary | Runs on | Role |
-|--------|---------|------|
-| `bossa-daemon` | Edge device (Pi 5) | Driver hosting, sampling, local storage, upload |
-| `bossa-server` | Server / cloud VM / same Pi | REST ingress, authentication, DB writes |
+| Artifact | Runs on | Role |
+|----------|---------|------|
+| `bossa-daemon` | Edge device (Pi 5) | Driver hosting, sampling, local SQLite, upload |
+| BOSSA Worker | Cloudflare | REST ingress, authentication, D1 writes |
+| BOSSA D1 database | Cloudflare | Authoritative remote telemetry store |
 
-Both binaries link against shared static libraries (`bossa_core`, `bossa_io`,
-`bossa_telemetry`, etc.) built from the same CMake project.
+The edge binary links against shared static libraries (`bossa_core`, `bossa_io`,
+`bossa_telemetry`, etc.) built from this CMake project. The Worker lives under
+`workers/` (Phase 4).
 
 ---
 
@@ -114,19 +115,19 @@ mocks and hardware tests run on the Pi.
 | Layer | Library | Rationale |
 |-------|---------|-----------|
 | Edge local buffer | **SQLite 3** (`libsqlite3-dev`) | Single-file, zero-config, survives power loss; ideal offline queue |
-| Remote primary store | **Cloudflare D1** (SQLite) via Worker | Same Cloudflare platform as the companion cloud stack; no extra DB service |
-| Remote fallback (optional) | PostgreSQL via libpqxx | Only if D1 limits or Freshy schema require it |
+| Remote primary store | **Cloudflare D1** (SQLite) via BOSSA Worker | Plain SQLite in the cloud; no second database engine |
 
 SQLite on the edge is a **transient buffer**, not the system of record. The
-remote D1 database (behind a Worker) is authoritative for uploaded telemetry.
+remote D1 database (behind the BOSSA Worker) is authoritative for uploaded
+telemetry.
 
 **Rejected alternatives:**
 
 | Alternative | Reason rejected |
 |-------------|-----------------|
-| InfluxDB | Not SQL; incompatible with companion cloud schema |
-| MongoDB | Document store; user requires relational SQL model |
-| Standalone PostgreSQL as default | Multiplies services when Cloudflare D1 already covers SQL needs |
+| Other SQL engines as remote store | Project standardizes on SQLite (edge file + D1) only |
+| InfluxDB | Not SQL; incompatible with companion data model |
+| MongoDB | Document store; relational SQL required |
 | LevelDB / RocksDB | Key-value; poor fit for time-series SQL queries |
 
 ### 4.4 Networking
@@ -134,9 +135,9 @@ remote D1 database (behind a Worker) is authoritative for uploaded telemetry.
 | Concern | Library | Rationale |
 |---------|---------|-----------|
 | HTTP client (edge upload) | **libcurl** | Mature, supports TLS, retries, timeouts |
-| HTTP server (ingress) | **Cloudflare Worker** | Hosts `POST /api/v1/telemetry`; writes D1 |
+| HTTP server (ingress) | **Cloudflare Worker** (BOSSA-owned) | Hosts `POST /api/v1/telemetry`; writes D1 |
 | TLS | OpenSSL (via curl); Worker edge TLS | System library on Debian/Raspberry Pi OS |
-| MQTT bridge (optional, Phase 5) | **libmosquitto** | Standard IoT pub/sub for integrations that expect MQTT |
+| MQTT bridge (optional, Phase 5) | **libmosquitto** | Parked; not required for v1 |
 
 **Rejected alternatives:**
 
@@ -145,7 +146,7 @@ remote D1 database (behind a Worker) is authoritative for uploaded telemetry.
 | Boost.Beast | Heavy dependency for embedded targets |
 | gRPC | Overkill for batched telemetry; larger binary |
 | Custom socket code | Reinvents TLS, retry, and parsing |
-| C++ cpp-httplib server as default | Prefer Worker on existing Cloudflare account |
+| C++ HTTP server in-repo | Prefer Cloudflare Worker + D1 |
 
 ### 4.5 Driver Plugins
 
@@ -169,9 +170,7 @@ bossa::
 ```
 
 Namespace mirrors directory structure per [guidelines](guidelines.md).
-
-> **Note:** A C++ `bossa::server` / `bossa-server` binary is an optional fallback.
-> The preferred remote path is a Cloudflare Worker writing to D1.
+Remote ingress is TypeScript under `workers/` (Phase 4), not a C++ server module.
 
 ---
 
@@ -230,21 +229,20 @@ channels:
       destinations: []        # actuators are command-driven, not sampled
 ```
 
-### 6.2 Server configuration (`/etc/bossa/server.yaml`)
+### 6.2 Worker / D1 configuration (Phase 4)
 
-```yaml
-listen:
-  host: 0.0.0.0
-  port: 8443
-  tls_cert: /etc/bossa/server.crt
-  tls_key: /etc/bossa/server.key
+Edge nodes only need `server.url` pointing at the BOSSA Worker. Worker secrets
+and D1 bindings live in Wrangler config (not on the Pi):
 
-database:
-  connection_string: "postgresql://bossa:secret@localhost:5432/bossa"
-  pool_size: 10
+```toml
+# workers/wrangler.toml (illustrative)
+name = "bossa-telemetry"
+main = "src/index.ts"
 
-auth:
-  api_keys_table: edge_nodes   # or flat file for v1 simplicity
+[[d1_databases]]
+binding = "DB"
+database_name = "bossa-telemetry"
+database_id = "<d1-database-id>"
 ```
 
 ### 6.3 Validation rules
@@ -436,7 +434,7 @@ Server response:
 
 ---
 
-## 10. Server Component
+## 10. Remote Ingress (Cloudflare Worker + D1)
 
 ### 10.1 REST API
 
@@ -444,58 +442,49 @@ Server response:
 |--------|------|-------------|
 | `POST` | `/api/v1/telemetry` | Ingest batched samples |
 | `GET` | `/api/v1/health` | Liveness (`{"status":"ok"}`) |
-| `GET` | `/api/v1/health/ready` | Readiness (DB connection alive) |
+| `GET` | `/api/v1/health/ready` | Readiness (D1 ping succeeds) |
 
 Authentication: `Authorization: Bearer <api_key>` header.
 
-### 10.2 PostgreSQL schema (v1)
+### 10.2 D1 schema (SQLite v1)
 
-Designed for compatibility with TimescaleDB hypertables.
+Plain SQLite dialect for Cloudflare D1. Timestamps are ISO-8601 text (UTC).
 
 ```sql
 CREATE TABLE edge_nodes (
     node_id       TEXT PRIMARY KEY,
     api_key_hash  TEXT NOT NULL,
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-    last_seen_at  TIMESTAMPTZ
+    created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    last_seen_at  TEXT
 );
 
 CREATE TABLE telemetry_points (
     node_id       TEXT NOT NULL REFERENCES edge_nodes(node_id),
     channel_id    TEXT NOT NULL,
-    timestamp     TIMESTAMPTZ NOT NULL,
-    value         DOUBLE PRECISION NOT NULL,
+    timestamp     TEXT NOT NULL,
+    value         REAL NOT NULL,
     unit          TEXT NOT NULL,
     quality       TEXT NOT NULL DEFAULT 'good',
-    received_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    received_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     PRIMARY KEY (node_id, channel_id, timestamp)
 );
 
--- Optional: convert to hypertable when TimescaleDB is available
--- SELECT create_hypertable('telemetry_points', 'timestamp');
-```
-
-Indexes:
-
-```sql
 CREATE INDEX idx_telemetry_node_time
     ON telemetry_points (node_id, timestamp DESC);
 CREATE INDEX idx_telemetry_channel_time
     ON telemetry_points (channel_id, timestamp DESC);
 ```
 
-The companion cloud project may add tables (alerts, devices, users) that
-reference `edge_nodes.node_id` via foreign keys.
+Companion apps may add views or separate tables that reference
+`edge_nodes.node_id`. Retention and aggregates are application-level SQL/jobs on D1.
 
 ### 10.3 Write path
 
 1. Validate JSON schema and API key.
-2. Begin transaction.
+2. Begin D1 batch / transaction.
 3. Bulk `INSERT ... ON CONFLICT DO NOTHING` (idempotent replay).
 4. Update `edge_nodes.last_seen_at`.
 5. Commit.
-
-Batch inserts use libpqxx `pqxx::work` with prepared statements.
 
 ---
 
@@ -507,7 +496,7 @@ Batch inserts use libpqxx `pqxx::work` with prepared statements.
 | API keys | Stored hashed (bcrypt) on server; plain text only in edge file with `0600` permissions |
 | Local SQLite | File permissions `0640`, owned by `bossa` user |
 | Input validation | JSON schema validation on server; reject oversize payloads (> 1 MB) |
-| Privilege separation | `bossa-daemon` runs as non-root `bossa` user; GPIO access via group membership (`gpio`) |
+| Privilege separation | `bossa-daemon` runs as non-root `bossa` user; GPIO via `gpio` group; Worker secrets hold API key hashes |
 
 ---
 
@@ -531,11 +520,11 @@ Per [guidelines](guidelines.md):
 | Scheduler | Deterministic time injection; verify deadline ordering |
 | Ring buffer | Boundary tests (full, empty, overflow policy) |
 | Sync engine | Simulated HTTP failures; verify SQLite fallback |
-| Server | In-process httplib test client; test PostgreSQL via Docker in CI |
-| Integration | Deploy to Pi 5; read real sensor; verify row in PostgreSQL |
+| Worker / D1 | `wrangler dev` / Miniflare; assert D1 rows after POST |
+| Integration | Deploy to Pi 5; read real sensor; verify row in D1 |
 
 Minimum coverage target: **90 %** line coverage on `bossa_core`, `bossa_telemetry`,
-`bossa_sync`, and `bossa_server`.
+and `bossa_sync`.
 
 ---
 
@@ -550,19 +539,16 @@ add_library(bossa_drivers STATIC ...)
 add_library(bossa_telemetry STATIC ...)
 add_library(bossa_storage STATIC ...)
 add_library(bossa_sync STATIC ...)
-add_library(bossa_server_lib STATIC ...)
 
 add_executable(bossa-daemon src/daemon_main.cpp)
-add_executable(bossa-server server/main.cpp)
 
 target_link_libraries(bossa-daemon PRIVATE bossa_core bossa_io ...)
-target_link_libraries(bossa-server PRIVATE bossa_server_lib ...)
+# Remote ingress: workers/ (Cloudflare Worker + D1), not a C++ binary
 ```
 
 ### Debian packages (future)
 
 - `bossa-daemon` — edge runtime + systemd unit + example config
-- `bossa-server` — server binary + systemd unit + SQL migration scripts
 - `libbossa-dev` — headers for out-of-tree driver development
 
 ---
@@ -582,11 +568,11 @@ target_link_libraries(bossa-server PRIVATE bossa_server_lib ...)
 
 | Topic | Current lean | Decision needed by |
 |-------|-------------|-------------------|
-| Remote store platform | **Cloudflare Worker + D1** (not C++ PostgreSQL) | Decided for Phase 4 |
-| Config hot-reload (`SIGHUP`) | Yes, reload channels without restart | Phase 3 (implementing) |
-| MQTT bridge priority | Phase 5, optional | Phase 5 planning |
+| Remote store platform | **BOSSA Worker + D1 (SQLite only)** | Decided |
+| Config hot-reload (`SIGHUP`) | Yes — implemented in Phase 3 | Done |
+| MQTT bridge priority | Phase 5, optional / parked | Phase 5 planning |
 | Multi-tenancy on ingress | Single-tenant v1; add `tenant_id` later if needed | Before production deploy |
-| D1 vs Durable Object SQLite | D1 for shared telemetry table; DO only if per-node isolation needed | Phase 4 design |
+| D1 vs Durable Object SQLite | **D1** for shared telemetry; DO only if per-node isolation needed | Phase 4 design |
 
 ---
 
@@ -595,7 +581,7 @@ target_link_libraries(bossa-server PRIVATE bossa_server_lib ...)
 - [BOSSA Roadmap](roadmap.md)
 - [Coding Guidelines](guidelines.md)
 - libgpiod: https://git.kernel.org/pub/scm/libs/libgpiod/libgpiod.git/
-- libpqxx: https://github.com/jtv/libpqxx
-- TimescaleDB: https://www.timescale.com/
+- SQLite: https://www.sqlite.org/
+- Cloudflare D1: https://developers.cloudflare.com/d1/
 - yaml-cpp: https://github.com/jbeder/yaml-cpp
-- cpp-httplib: https://github.com/yhirose/cpp-httplib
+- libcurl: https://curl.se/libcurl/

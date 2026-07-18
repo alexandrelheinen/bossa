@@ -1,5 +1,7 @@
 # Phase 2 — I/O Abstractions and First Driver
 
+**Status:** Software complete; Pi 5 BME280 smoke paused until hardware is available.
+
 This document describes the **architecture**, **implementation steps**, and **design
 patterns** for Phase 2 of the BOSSA roadmap. It is the spec-anchored design
 companion to [roadmap.md](roadmap.md) § Phase 2.

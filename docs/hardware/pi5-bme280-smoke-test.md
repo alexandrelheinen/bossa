@@ -4,10 +4,9 @@ This guide documents the **Phase 2 acceptance smoke test**: read a real BME280
 over I2C on a Raspberry Pi 5 and log temperature (and humidity) approximately
 every second via syslog.
 
-Until Phase 3 wires YAML channels into the daemon scheduler, use the
-`bossa-bme280-smoke` helper binary (same `Bme280Driver` stack as production).
-`bossa-daemon --foreground` remains the deployment sanity check (config load +
-service loop).
+Phase 3 added the daemon scheduler; full driver→buffer→upload wiring may still
+use the `bossa-bme280-smoke` helper for hardware acceptance (same `Bme280Driver`
+stack). `bossa-daemon --foreground` remains the deployment sanity check.
 
 **Traceability:** [roadmap.md](../roadmap.md) Phase 2 acceptance criteria.
 
@@ -159,7 +158,7 @@ Confirms config load and foreground service loop (heartbeat every 5 s):
 sudo /opt/bossa/bin/bossa-daemon --foreground --config /etc/bossa/config.yaml
 ```
 
-Channel-driven BME280 polling inside `bossa-daemon` arrives in **Phase 3**.
+For Phase 2 hardware acceptance, `bossa-bme280-smoke` remains the dedicated poll harness.
 
 ---
 
