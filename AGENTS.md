@@ -58,5 +58,6 @@ Notes for cloud agents working in this repository:
 - **Specification stack:** Read [docs/specification.md](docs/specification.md)
   for APIs and library choices; [docs/roadmap.md](docs/roadmap.md) for the
   current phase and acceptance criteria.
-- **Ecosystem:** BOSSA syncs telemetry to PostgreSQL for the companion Freshy
-  SQL project (private repo). Edge uploads via HTTPS; the server writes to SQL.
+- **Ecosystem:** BOSSA syncs telemetry to a BOSSA-owned Cloudflare Worker + D1
+  (SQLite). Edge keeps a local SQLite offline buffer; uploads go over HTTPS.
+  Companion projects (e.g. Freshy) may consume the same D1 data.

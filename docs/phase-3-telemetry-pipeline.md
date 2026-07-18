@@ -20,7 +20,7 @@ the existing `POST /api/v1/telemetry` contract to a configurable URL.
 
 - Raspberry Pi / BME280 hardware smoke (Phase 2, paused until hardware access).
 - Cloudflare Worker / D1 ingress implementation (Phase 4 lean — see below).
-- C++ `bossa-server` + PostgreSQL (superseded as the preferred remote path).
+- Non-SQLite remote databases (out of scope).
 
 ---
 
@@ -29,7 +29,7 @@ the existing `POST /api/v1/telemetry` contract to a configurable URL.
 | Layer | Technology | Notes |
 |-------|------------|-------|
 | Edge offline buffer | **SQLite 3** on the Pi | Required for offline queue; unrelated to cloud choice |
-| Remote ingress (Phase 4) | **Cloudflare Worker + D1** | Prefer existing Cloudflare SQL stack; avoid a second DB service |
+| Remote ingress (Phase 4) | **BOSSA Worker + D1** | Plain SQLite in the cloud; BOSSA-owned Worker + database |
 | Edge → remote protocol | `POST /api/v1/telemetry` JSON | Unchanged; `server.url` points at the Worker |
 
 Phase 3 only needs a **configurable upload URL** and a mockable HTTP client.

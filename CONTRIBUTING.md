@@ -47,16 +47,16 @@ context helps contributors apply the method consistently.
 | **[Freshy](https://freshy-25e.pages.dev/explore)** | Mobile-first cooling-map app (Next.js, Cloudflare) | Product-level SDD in a private repo; SQL data model for telemetry and analytics |
 | **[ARCO](https://github.com/alexandrelheinen/arco)** | Motion planning and control algorithms | Algorithm library; consumed by FRET for planning |
 | **[FRET](https://github.com/alexandrelheinen/fret)** | ROS 2 end-to-end robotic planning + control stack | Reference constitution for SDD + 4-level V-cycle + agent policy |
-| **BOSSA (this repo)** | Edge runtime + telemetry server for IoT on ARM Linux | C++20 embedded framework; Pi 5 first target; PostgreSQL sync |
+| **BOSSA (this repo)** | Edge runtime + Worker/D1 telemetry for IoT on ARM Linux | C++20 embedded framework; Pi 5 first target; SQLite (edge + D1) |
 
 ### What BOSSA provides
 
 BOSSA is a **modular C++20 embedded framework** with two deployable binaries:
 
-| Binary | Runs on | Role |
+| Artifact | Runs on | Role |
 | --- | --- | --- |
 | `bossa-daemon` | Raspberry Pi 5 (edge) | Driver hosting, sampling, local SQLite buffer, HTTPS upload |
-| `bossa-server` | Server / cloud VM | REST ingress, authentication, PostgreSQL writer |
+| BOSSA Worker + D1 | Cloudflare | REST ingress, authentication, D1 (SQLite) writes |
 
 The specification stack:
 
@@ -65,7 +65,7 @@ The specification stack:
 | 1 — Functional | [docs/specification.md](docs/specification.md) §1–2, [docs/roadmap.md](docs/roadmap.md) phase acceptance criteria | Hardware smoke tests, integration tests |
 | 2 — Architecture | [README.md § Architecture](../README.md#architecture-overview), [docs/specification.md](docs/specification.md) §3–11 | Cross-compile CI, API contract tests |
 | 3 — Module API | Public headers under `include/bossa/` | `tests/` mirroring `include/bossa/` (GTest) |
-| 4 — Implementation | `src/`, `drivers/`, `server/` | Full CI + Pi 5 deployment smoke |
+| 4 — Implementation | `src/`, `drivers/`, `workers/` | Full CI + Pi 5 deployment smoke |
 
 Project status and delivery sequence: [docs/roadmap.md](docs/roadmap.md).
 Architecture and technology stack: [README.md](../README.md).
@@ -207,12 +207,12 @@ previous one.
 | Side | Artifact | BOSSA location |
 | --- | --- | --- |
 | **Specify** | Goals, sync policies, driver behavior, server API contract | [docs/specification.md](docs/specification.md), [docs/roadmap.md](docs/roadmap.md) phase criteria |
-| **Verify** | Observable pass criteria on hardware or integration tests | Pi 5 smoke test, server + PostgreSQL end-to-end |
+| **Verify** | Observable pass criteria on hardware or integration tests | Pi 5 smoke test, Worker + D1 end-to-end |
 
 **Rule:** No Level 2 work on new behavior until the relevant specification
 section and roadmap acceptance criteria exist.
 
-**Validation:** Deploy to Pi 5; verify syslog output, SQLite rows, or PostgreSQL
+**Validation:** Deploy to Pi 5; verify syslog output, edge SQLite rows, or D1
 inserts as appropriate.
 
 ### Level 2 — Architecture and interfaces
@@ -244,7 +244,7 @@ mocked—never require a Pi for unit tests.
 
 | Side | Artifact | BOSSA location |
 | --- | --- | --- |
-| **Specify** | Algorithms, driver adapters, server wiring | `src/`, `drivers/`, `server/` |
+| **Specify** | Algorithms, driver adapters, Worker/D1 wiring | `src/`, `drivers/`, `workers/` |
 | **Verify** | Full test suite, coverage ≥ 90%, Pi 5 smoke test | All CI workflows + hardware |
 
 **Rule:** A feature is not done until CI is green and the relevant acceptance
@@ -258,7 +258,7 @@ involved).
 | Left — Specify | **Issue** | What must be done, edge cases, tests that must pass (DoD) |
 | Left — Design | **Issue + `docs/`** | Architecture notes, specification updates when needed |
 | Right — Verify | **PR + CI** | GTest, formatting, native build, cross-compile |
-| Right — Accept | **Human merge** | Review CI, hardware logs, PostgreSQL rows when applicable |
+| Right — Accept | **Human merge** | Review CI, hardware logs, D1 rows when applicable |
 
 At the base of the V, the **agent loop** runs locally before each commit:
 format → build → test → cross-compile → fix until green.
@@ -318,7 +318,7 @@ steps) before pushing.
 ### Layer 3 — Human merge
 
 Every change is merged by a maintainer after reviewing CI results and, when
-relevant, hardware evidence (syslog traces, PostgreSQL query results, oscilloscope
+relevant, hardware evidence (syslog traces, D1 query results, oscilloscope
 or logic-analyzer captures for timing-critical I/O). The agent does not decide
 when work is done.
 
@@ -564,12 +564,12 @@ Before marking defensive work complete:
 4. GTest in `tests/io/<bus>_test.cpp`
 5. No direct hardware access outside `bossa::io` implementations
 
-### Adding a server endpoint
+### Adding a Worker / D1 endpoint
 
-1. Handler in `src/server/` or `include/bossa/server/`
+1. Route handler in `workers/` (Phase 4 Cloudflare Worker)
 2. Update [docs/specification.md](docs/specification.md) §10 REST API table
-3. Contract test with in-process httplib client
-4. PostgreSQL integration test via Docker Compose (when CI supports it)
+3. Contract test with `wrangler dev` or Miniflare
+4. D1 migration + integration test when CI supports it
 
 ### Adding a dependency
 
@@ -581,7 +581,7 @@ Before marking defensive work complete:
 
 ### systemd service changes
 
-1. Update unit file in `config/bossa.service` or `config/bossa-server.service`
+1. Update unit file in `config/bossa.service`
 2. Document in PR if `Type=`, `User=`, or `ExecStart=` changes
 3. Test on Pi: `sudo systemctl daemon-reload && sudo systemctl restart bossa`
 
@@ -623,7 +623,7 @@ sudo /opt/bossa/bin/bossa-daemon --foreground
 | --- | --- |
 | Driver | Correct sample values in syslog; see [Pi 5 BME280 smoke test](docs/hardware/pi5-bme280-smoke-test.md) |
 | Scheduler | Samples arrive at configured `sample_rate_hz` (±10%) |
-| Sync / upload | Row appears in PostgreSQL `telemetry_points` table |
+| Sync / upload | Row appears in D1 `telemetry_points` table |
 | Offline mode | Disconnect network; samples in SQLite; reconnect; rows uploaded |
 | GPIO / actuator | Pin state matches command; no glitches on startup |
 

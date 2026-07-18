@@ -15,14 +15,13 @@ bossa/
 │   ├── io/                ← GPIO, I2C, SPI abstractions
 │   ├── drivers/           ← Driver interface and registry
 │   ├── telemetry/         ← Sample types, ring buffer, scheduler
-│   ├── storage/           ← SQLite local store
-│   ├── sync/              ← Upload policy and retry logic
-│   └── server/            ← REST ingress and DB writer
+│   ├── storage/           ← Edge SQLite local store
+│   └── sync/              ← Upload policy and HTTP uploader
 ├── src/                   ← Implementation files (.cpp)
 ├── drivers/               ← Built-in and example driver adapters
-├── server/                ← bossa-server entry point
+├── workers/               ← (Phase 4) Cloudflare Worker + D1
 ├── tests/                 ← Unit tests (GTest)
-├── config/                ← systemd units, example YAML, SQL migrations
+├── config/                ← systemd units, example YAML, D1 migrations
 ├── scripts/               ← Build, deployment, and utility scripts
 ├── docs/                  ← Specification, roadmap, guidelines
 └── CMakeLists.txt         ← Build configuration
