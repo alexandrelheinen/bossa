@@ -9,28 +9,32 @@
 #include <filesystem>
 #include <string>
 #include <thread>
-#include <vector>
 
 #include <syslog.h>
 
 #include "bossa/core/config.hpp"
 #include "bossa/core/service.hpp"
-#include "bossa/telemetry/scheduler.hpp"
+#include "bossa/runtime/telemetry_runtime.hpp"
+#include "bossa/sync/curl_http_client.hpp"
 
 namespace {
 
 constexpr const char *kDefaultConfigPath = "/etc/bossa/config.yaml";
 
 /**
- * @brief Edge service: heartbeat or channel schedule with SIGHUP reload.
+ * @brief Edge service: telemetry pipeline with SIGHUP reload.
  */
 class EdgeService : public bossa::core::Service {
   public:
     EdgeService(bossa::core::ServiceOptions options,
                 std::filesystem::path config_path, bossa::core::Config config)
         : bossa::core::Service("bossa", options),
-          config_path_(std::move(config_path)), config_(std::move(config)) {
-        apply_schedule();
+          config_path_(std::move(config_path)), config_(std::move(config)),
+          runtime_(http_client_) {
+        if (!runtime_.configure(config_, /*api_key=*/{})) {
+            syslog(LOG_ERR, "telemetry configure failed: %s",
+                   runtime_.last_error().c_str());
+        }
     }
 
     void reload() override {
@@ -40,23 +44,25 @@ class EdgeService : public bossa::core::Service {
             return;
         }
         config_ = result.value();
-        apply_schedule();
+        if (!runtime_.configure(config_, /*api_key=*/{})) {
+            syslog(LOG_ERR, "reload configure failed: %s",
+                   runtime_.last_error().c_str());
+            return;
+        }
         syslog(LOG_INFO, "reload applied (%zu channels)",
                config_.channels.size());
     }
 
     void loop() override {
-        if (scheduler_.channel_count() == 0) {
+        if (config_.channels.empty()) {
             syslog(LOG_INFO, "heartbeat");
             std::this_thread::sleep_for(std::chrono::seconds(5));
             return;
         }
 
-        scheduler_.dispatch_due([](const std::string &channel_id) {
-            syslog(LOG_INFO, "channel due: %s", channel_id.c_str());
-        });
+        runtime_.tick();
 
-        const auto next = scheduler_.next_deadline();
+        const auto next = runtime_.next_wake();
         if (!next.has_value()) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
             return;
@@ -69,18 +75,10 @@ class EdgeService : public bossa::core::Service {
     }
 
   private:
-    void apply_schedule() {
-        std::vector<bossa::telemetry::ScheduleEntry> entries;
-        entries.reserve(config_.channels.size());
-        for (const auto &channel : config_.channels) {
-            entries.push_back({channel.id, channel.sample_rate_hz});
-        }
-        scheduler_.configure(std::move(entries));
-    }
-
     std::filesystem::path config_path_;
     bossa::core::Config config_;
-    bossa::telemetry::Scheduler scheduler_;
+    bossa::sync::CurlHttpClient http_client_;
+    bossa::runtime::TelemetryRuntime runtime_;
 };
 
 bool parse_args(int argc, char *argv[], bool *foreground,

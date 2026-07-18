@@ -111,27 +111,37 @@ target_link_libraries(bossa_sync
 
 set(BOSSA_DRIVERS_SOURCES
     src/drivers/registry.cpp
-    drivers/bme280/bme280_driver.cpp)
+    drivers/bme280/bme280_driver.cpp
+    drivers/sim/sim_driver.cpp)
 
 add_library(bossa_drivers STATIC ${BOSSA_DRIVERS_SOURCES})
 target_include_directories(bossa_drivers
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/drivers/bme280)
+        ${CMAKE_CURRENT_SOURCE_DIR}/drivers/bme280
+        ${CMAKE_CURRENT_SOURCE_DIR}/drivers/sim)
 target_link_libraries(bossa_drivers
     PUBLIC
         bossa_io
         bossa_telemetry
         nlohmann_json::nlohmann_json)
 
+set(BOSSA_RUNTIME_SOURCES
+    src/runtime/telemetry_runtime.cpp)
+
+add_library(bossa_runtime STATIC ${BOSSA_RUNTIME_SOURCES})
+target_include_directories(bossa_runtime
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(bossa_runtime
+    PUBLIC
+        bossa_drivers
+        bossa_sync)
+
 add_executable(${BOSSA_DAEMON_NAME} src/daemon_main.cpp)
 target_link_libraries(${BOSSA_DAEMON_NAME}
     PRIVATE
-        bossa_core
-        bossa_drivers
-        bossa_telemetry
-        bossa_storage
-        bossa_sync)
+        bossa_runtime)
 
 add_executable(bossa-bme280-smoke src/tools/bme280_smoke_main.cpp)
 target_link_libraries(bossa-bme280-smoke PRIVATE bossa_drivers)
@@ -158,13 +168,15 @@ if(NOT CMAKE_CROSSCOMPILING)
       tests/storage/local_store_test.cpp
       tests/sync/upload_policy_test.cpp
       tests/sync/http_uploader_test.cpp
+      tests/runtime/telemetry_pipeline_test.cpp
       tests/mocks/mock_gpio.cpp
       tests/mocks/mock_i2c_bus.cpp)
 
   target_include_directories(bossa_tests
       PRIVATE
           ${CMAKE_CURRENT_SOURCE_DIR}/tests/mocks
-          ${CMAKE_CURRENT_SOURCE_DIR}/drivers/bme280)
+          ${CMAKE_CURRENT_SOURCE_DIR}/drivers/bme280
+          ${CMAKE_CURRENT_SOURCE_DIR}/drivers/sim)
 
   target_compile_definitions(bossa_tests
       PRIVATE
@@ -174,11 +186,7 @@ if(NOT CMAKE_CROSSCOMPILING)
 
   target_link_libraries(bossa_tests
       PRIVATE
-          bossa_core
-          bossa_drivers
-          bossa_telemetry
-          bossa_storage
-          bossa_sync
+          bossa_runtime
           GTest::gtest_main)
 
   include(GoogleTest)

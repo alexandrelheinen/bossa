@@ -1,0 +1,32 @@
+# Reserved CI / sim node — never use in production.
+# node.id MUST remain bossa-test-00000000 so cleanup scripts can wipe safely.
+config_version: 1
+
+node:
+  id: bossa-test-00000000
+  api_key_file: /etc/bossa/api.key
+
+server:
+  url: https://telemetry.example.com
+  upload_timeout_seconds: 30
+  max_batch_size: 100
+
+local_storage:
+  path: /tmp/bossa-test-telemetry.db
+  max_size_megabytes: 32
+  retention_hours: 24
+
+channels:
+  - id: sim_temperature
+    driver: sim
+    parameters:
+      channel_id: sim_temperature
+      unit: celsius
+      base_value: 21.0
+      step: 0.25
+    sample_rate_hz: 1.0
+    sync:
+      destinations: [local, remote]
+      remote_interval_seconds: 5
+      priority: normal
+      mode: batch

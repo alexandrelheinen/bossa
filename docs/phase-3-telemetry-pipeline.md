@@ -92,6 +92,7 @@ flowchart LR
 | 7 | 3.7 | `HttpUploader` + `HttpClient` (libcurl + mock) |
 | 8 | 3.8 | Offline queue: fail → SQLite → retry |
 | 9 | 3.9 | `SIGHUP` reload of channel rates |
+| 10 | 3.10 | `TelemetryRuntime` + `sim` driver + pipeline tests |
 
 ---
 
@@ -104,10 +105,18 @@ From [roadmap.md](roadmap.md) Phase 3 (software / GTest; no Pi required):
 - [x] Ring buffer overflow drops `low` priority first
 - [x] Simulated network failure → samples persist in SQLite → succeed on retry
 - [x] `SIGHUP` / scheduler reconfigure reloads a changed `sample_rate_hz`
+- [x] Sim driver → runtime → mock HTTP integration (incl. offline retry)
 - [x] Native and ARM64 builds pass locally; formatting clean
 
-Coverage target ≥ 90 % on `bossa_telemetry` / `bossa_sync` is aspirational for
-this PR; unit tests must cover the acceptance bullets above.
+Coverage target ≥ 90 % on `bossa_telemetry` / `bossa_sync` remains a follow-up
+metric, not a Phase 3 merge blocker.
+
+### Reserved test identity
+
+CI / sim configs use `node.id: bossa-test-00000000`
+(`bossa::core::kReservedTestNodeId`). See
+`config/examples/config-sim-test.yaml` and
+`scripts/ops/cleanup_test_telemetry.sh`.
 
 ---
 

@@ -164,13 +164,14 @@ available again; Phase 3 proceeds without it. Smoke guide remains
 |----|------|-----|
 | 3.1 | `bossa::telemetry::Sample` and `Channel` types | Per specification §8 |
 | 3.2 | `bossa::telemetry::RingBuffer` | Fixed capacity, no alloc in hot path |
-| 3.3 | `bossa::telemetry::Scheduler` | Priority threads, deadline-based polling |
+| 3.3 | `bossa::telemetry::Scheduler` | Deadline-based polling (service-loop tick) |
 | 3.4 | Full YAML channel + sync config parsing | Per specification §6 |
 | 3.5 | `bossa::storage::LocalStore` (SQLite) | `pending_uploads` table; WAL mode |
 | 3.6 | `bossa::sync::UploadPolicy` | Evaluate `batch`, `realtime`, `on_change` modes |
 | 3.7 | `bossa::sync::HttpUploader` stub | libcurl POST to configurable URL; mock in tests |
 | 3.8 | Offline queue | Failed upload → SQLite; retry with backoff |
 | 3.9 | Config hot-reload (`SIGHUP`) | Reload channels without process restart |
+| 3.10 | `TelemetryRuntime` + `sim` driver | End-to-end middleware without hardware |
 
 ### Acceptance criteria
 
@@ -179,6 +180,7 @@ available again; Phase 3 proceeds without it. Smoke guide remains
 - [x] Ring buffer overflow drops `low` priority first
 - [x] Simulated network failure → samples persist in SQLite → succeed on retry
 - [x] `SIGHUP` / scheduler reconfigure reloads a changed `sample_rate_hz`
+- [x] Sim driver → runtime → mock HTTP (and offline retry) integration tests
 - [ ] ≥ 90 % line coverage on `bossa_telemetry` and `bossa_sync` (follow-up)
 
 ### Estimated scope

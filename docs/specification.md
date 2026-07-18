@@ -450,6 +450,14 @@ Authentication: `Authorization: Bearer <api_key>` header.
 
 Plain SQLite dialect for Cloudflare D1. Timestamps are ISO-8601 text (UTC).
 
+**Identity model:** one logical row stream keyed by `node_id` + `channel_id`
+(not one physical table per sensor type). Sensor “type” is the driver / channel
+naming convention. A reserved CI node id is defined in
+`bossa::core::kReservedTestNodeId` (`bossa-test-00000000`, the “0x00” test
+identity). Never assign it to production devices. Cleanup:
+`scripts/ops/cleanup_test_telemetry.sh` and the manual GitHub Action
+`Cleanup test telemetry`.
+
 ```sql
 CREATE TABLE edge_nodes (
     node_id       TEXT PRIMARY KEY,
