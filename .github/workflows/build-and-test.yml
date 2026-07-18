@@ -40,6 +40,8 @@ jobs:
             libyaml-cpp-dev \
             libsystemd-dev \
             libgpiod-dev \
+            libsqlite3-dev \
+            libcurl4-openssl-dev \
             pkg-config
 
       - name: Build (native x86_64)
@@ -72,6 +74,13 @@ jobs:
 
       - name: Install cross-compilation toolchain
         run: |
+          sudo dpkg --add-architecture arm64
+          # arm64 packages come from ports.ubuntu.com, not archive.ubuntu.com
+          printf '%s\n' \
+            'deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble main universe restricted multiverse' \
+            'deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-updates main universe restricted multiverse' \
+            'deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-security main universe restricted multiverse' \
+            | sudo tee /etc/apt/sources.list.d/arm64-ports.list
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
@@ -82,6 +91,12 @@ jobs:
             binutils-aarch64-linux-gnu \
             libyaml-cpp-dev \
             pkg-config
+          # Multiarch -dev packages may clash on shared helper binaries
+          # (e.g. curl-config); force overwrite is safe for CI linkers.
+          sudo apt-get install -y \
+            -o Dpkg::Options::="--force-overwrite" \
+            libsqlite3-dev:arm64 \
+            libcurl4-openssl-dev:arm64
 
       - name: Cross-compile for ARM64
         run: |

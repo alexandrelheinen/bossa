@@ -23,12 +23,16 @@ namespace bossa::core {
 namespace {
 
 volatile sig_atomic_t g_running = 1;
+volatile sig_atomic_t g_reload = 0;
 
 void signal_handler(int sig) {
     switch (sig) {
     case SIGTERM:
     case SIGINT:
         g_running = 0;
+        break;
+    case SIGHUP:
+        g_reload = 1;
         break;
     default:
         break;
@@ -42,10 +46,28 @@ Service::Service(std::string name, ServiceOptions options)
 
 void Service::request_stop() { g_running = 0; }
 
+void Service::request_reload() { g_reload = 1; }
+
 bool Service::is_running() { return g_running != 0; }
+
+bool Service::is_reload_requested() { return g_reload != 0; }
+
+void Service::reload() {
+    syslog(LOG_INFO, "%s: reload requested (no-op base implementation)",
+           name_.c_str());
+}
+
+void Service::consume_reload_if_needed() {
+    if (g_reload == 0) {
+        return;
+    }
+    g_reload = 0;
+    reload();
+}
 
 int Service::start() {
     g_running = 1;
+    g_reload = 0;
 
     if (!options_.foreground) {
         daemonize();
@@ -68,6 +90,7 @@ int Service::start() {
 #endif
 
     while (g_running) {
+        consume_reload_if_needed();
         loop();
     }
 
@@ -90,6 +113,9 @@ bool Service::install_signal_handlers() {
         return false;
     }
     if (sigaction(SIGINT, &action, nullptr) < 0) {
+        return false;
+    }
+    if (sigaction(SIGHUP, &action, nullptr) < 0) {
         return false;
     }
     return true;

@@ -34,6 +34,9 @@ if(PkgConfig_FOUND AND NOT CMAKE_CROSSCOMPILING)
   pkg_check_modules(GPIOD libgpiod)
 endif()
 
+find_package(SQLite3 REQUIRED)
+find_package(CURL REQUIRED)
+
 set(BOSSA_CORE_SOURCES
     src/core/service.cpp
     src/core/config.cpp)
@@ -42,7 +45,10 @@ add_library(bossa_core STATIC ${BOSSA_CORE_SOURCES})
 target_include_directories(bossa_core
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(bossa_core PUBLIC yaml-cpp)
+target_link_libraries(bossa_core
+    PUBLIC
+        yaml-cpp
+        nlohmann_json::nlohmann_json)
 
 if(SYSTEMD_FOUND)
   target_compile_definitions(bossa_core PUBLIC HAVE_SYSTEMD)
@@ -66,10 +72,42 @@ if(GPIOD_FOUND)
   target_include_directories(bossa_io PUBLIC ${GPIOD_INCLUDE_DIRS})
 endif()
 
-add_library(bossa_telemetry INTERFACE)
+set(BOSSA_TELEMETRY_SOURCES
+    src/telemetry/ring_buffer.cpp
+    src/telemetry/scheduler.cpp)
+
+add_library(bossa_telemetry STATIC ${BOSSA_TELEMETRY_SOURCES})
 target_include_directories(bossa_telemetry
-    INTERFACE
+    PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(bossa_telemetry PUBLIC bossa_core)
+
+set(BOSSA_STORAGE_SOURCES
+    src/storage/local_store.cpp)
+
+add_library(bossa_storage STATIC ${BOSSA_STORAGE_SOURCES})
+target_include_directories(bossa_storage
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(bossa_storage
+    PUBLIC
+        bossa_telemetry
+        SQLite::SQLite3)
+
+set(BOSSA_SYNC_SOURCES
+    src/sync/upload_policy.cpp
+    src/sync/http_uploader.cpp
+    src/sync/curl_http_client.cpp)
+
+add_library(bossa_sync STATIC ${BOSSA_SYNC_SOURCES})
+target_include_directories(bossa_sync
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(bossa_sync
+    PUBLIC
+        bossa_storage
+        nlohmann_json::nlohmann_json
+        CURL::libcurl)
 
 set(BOSSA_DRIVERS_SOURCES
     src/drivers/registry.cpp
@@ -90,7 +128,10 @@ add_executable(${BOSSA_DAEMON_NAME} src/daemon_main.cpp)
 target_link_libraries(${BOSSA_DAEMON_NAME}
     PRIVATE
         bossa_core
-        bossa_drivers)
+        bossa_drivers
+        bossa_telemetry
+        bossa_storage
+        bossa_sync)
 
 add_executable(bossa-bme280-smoke src/tools/bme280_smoke_main.cpp)
 target_link_libraries(bossa-bme280-smoke PRIVATE bossa_drivers)
@@ -112,6 +153,11 @@ if(NOT CMAKE_CROSSCOMPILING)
       tests/core/config_test.cpp
       tests/core/daemon_integration_test.cpp
       tests/drivers/bme280_driver_test.cpp
+      tests/telemetry/ring_buffer_test.cpp
+      tests/telemetry/scheduler_test.cpp
+      tests/storage/local_store_test.cpp
+      tests/sync/upload_policy_test.cpp
+      tests/sync/http_uploader_test.cpp
       tests/mocks/mock_gpio.cpp
       tests/mocks/mock_i2c_bus.cpp)
 
@@ -130,6 +176,9 @@ if(NOT CMAKE_CROSSCOMPILING)
       PRIVATE
           bossa_core
           bossa_drivers
+          bossa_telemetry
+          bossa_storage
+          bossa_sync
           GTest::gtest_main)
 
   include(GoogleTest)

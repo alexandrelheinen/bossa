@@ -21,6 +21,8 @@ REQUIREMENTS="build-essential \
                 libyaml-cpp-dev \
                 libsystemd-dev \
                 libgpiod-dev \
+                libsqlite3-dev \
+                libcurl4-openssl-dev \
                 pkg-config"
 
 sudo apt update

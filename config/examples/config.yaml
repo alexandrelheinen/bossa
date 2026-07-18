@@ -1,9 +1,42 @@
-# Example BOSSA edge configuration (Phase 1 — top-level fields only).
+# Example BOSSA edge configuration (Phase 3 — channels + sync).
 config_version: 1
 
 node:
   id: greenhouse-sensor-01
   api_key_file: /etc/bossa/api.key
 
-# Channels are accepted but not yet processed (Phase 3).
-channels: []
+# Phase 4: point at a Cloudflare Worker that writes D1.
+server:
+  url: https://telemetry.example.com
+  upload_timeout_seconds: 30
+  max_batch_size: 500
+
+local_storage:
+  path: /var/lib/bossa/telemetry.db
+  max_size_megabytes: 256
+  retention_hours: 72
+
+channels:
+  - id: ambient_temperature
+    driver: bme280
+    parameters:
+      bus: /dev/i2c-1
+      address: 0x76
+    sample_rate_hz: 1.0
+    sync:
+      destinations: [local, remote]
+      remote_interval_seconds: 60
+      priority: normal
+      mode: batch
+
+  - id: ambient_humidity
+    driver: bme280
+    parameters:
+      bus: /dev/i2c-1
+      address: 0x76
+    sample_rate_hz: 0.5
+    sync:
+      destinations: [local, remote]
+      remote_interval_seconds: 120
+      priority: low
+      mode: batch

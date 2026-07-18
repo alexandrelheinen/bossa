@@ -7,6 +7,11 @@
 
 #include <filesystem>
 #include <string>
+#include <vector>
+
+#include <nlohmann/json.hpp>
+
+#include "bossa/telemetry/channel.hpp"
 
 namespace bossa::core {
 
@@ -16,14 +21,48 @@ struct NodeConfig {
     std::string api_key_file;
 };
 
+/** @brief Remote upload target (Cloudflare Worker URL in Phase 4). */
+struct ServerConfig {
+    std::string url;
+    int upload_timeout_seconds{30};
+    int max_batch_size{500};
+};
+
+/** @brief Edge SQLite offline buffer settings. */
+struct LocalStorageConfig {
+    std::filesystem::path path{"/var/lib/bossa/telemetry.db"};
+    int max_size_megabytes{256};
+    int retention_hours{72};
+};
+
+/** @brief Per-channel sync policy from YAML. */
+struct ChannelSyncConfig {
+    bool destination_local{true};
+    bool destination_remote{true};
+    int remote_interval_seconds{60};
+    telemetry::Priority priority{telemetry::Priority::kNormal};
+    telemetry::SyncMode mode{telemetry::SyncMode::kBatch};
+    double on_change_threshold{0.0};
+};
+
+/** @brief One configured sampling channel. */
+struct ChannelConfig {
+    std::string id;
+    std::string driver;
+    nlohmann::json parameters = nlohmann::json::object();
+    double sample_rate_hz{1.0};
+    ChannelSyncConfig sync;
+};
+
 /**
- * @brief Parsed edge configuration (Phase 1: top-level fields only).
- *
- * @details Channel and sync parsing is added in later phases.
+ * @brief Parsed edge configuration.
  */
 struct Config {
     int config_version = 0;
     NodeConfig node;
+    ServerConfig server;
+    LocalStorageConfig local_storage;
+    std::vector<ChannelConfig> channels;
 };
 
 /**

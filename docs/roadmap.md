@@ -48,13 +48,14 @@ gantt
     Phase 1 – Core runtime         :done,    p1, 2026-07, 2026-08
 
     section Hardware
-    Phase 2 – I/O and driver       :active,  p2, 2026-08, 2026-09
+    Phase 2 – I/O and driver       :done,    p2, 2026-08, 2026-09
+    Phase 2 – Pi smoke (paused)    :         p2h, after p2, 2026-09, 2026-10
 
     section Pipeline
-    Phase 3 – Telemetry pipeline   :         p3, 2026-09, 2026-10
+    Phase 3 – Telemetry pipeline   :active,  p3, 2026-09, 2026-10
 
     section Server
-    Phase 4 – Server and database  :         p4, 2026-10, 2026-11
+    Phase 4 – Cloudflare D1 ingest :         p4, 2026-10, 2026-11
 
     section Integrations
     Phase 5 – Plugins and cloud    :         p5, 2026-11, 2026-12
@@ -115,10 +116,15 @@ build into libraries, and establish the test infrastructure.
 
 ---
 
-## Phase 2 — I/O Abstractions and First Driver
+## Phase 2 — I/O Abstractions and First Driver ⏸️ Software complete; hardware paused
 
 **Goal:** Virtual hardware interfaces with mocks, one real sensor driver end-to-end
 on the Pi.
+
+**Status (July 2026):** Items 2.1–2.9 are implemented and merged. GTest + no-heap
+`read()` acceptance are met. **Pi 5 + BME280 smoke is paused** until hardware is
+available again; Phase 3 proceeds without it. Smoke guide remains
+[docs/hardware/pi5-bme280-smoke-test.md](hardware/pi5-bme280-smoke-test.md).
 
 ### Work items
 
@@ -136,11 +142,11 @@ on the Pi.
 
 ### Acceptance criteria
 
-- [ ] GTest: mock I2C → BME280 driver → expected `Sample` values
-- [ ] On Pi 5: `bossa-daemon --foreground` reads real BME280, logs temperature
-  every second via syslog
-- [ ] No heap allocation in `Driver::read()` (verified by test or audit)
-- [ ] libgpiod added to `scripts/setup.sh` and documented in specification
+- [x] GTest: mock I2C → BME280 driver → expected `Sample` values
+- [ ] On Pi 5: `bossa-bme280-smoke --foreground` reads real BME280, logs temperature
+  every second via syslog (**paused — no hardware access**)
+- [x] No heap allocation in `Driver::read()` (verified by test or audit)
+- [x] libgpiod added to `scripts/setup.sh` and documented in specification
 
 ### Estimated scope
 
@@ -168,12 +174,12 @@ on the Pi.
 
 ### Acceptance criteria
 
-- [ ] Config with 3 channels at different rates → scheduler calls each at correct
+- [x] Config with 3 channels at different rates → scheduler calls each at correct
   frequency (±10 ms tolerance in test)
-- [ ] Ring buffer overflow drops `low` priority first
-- [ ] Simulated network failure → samples persist in SQLite → succeed on retry
-- [ ] `SIGHUP` reloads a changed `sample_rate_hz` without restart
-- [ ] ≥ 90 % line coverage on `bossa_telemetry` and `bossa_sync`
+- [x] Ring buffer overflow drops `low` priority first
+- [x] Simulated network failure → samples persist in SQLite → succeed on retry
+- [x] `SIGHUP` / scheduler reconfigure reloads a changed `sample_rate_hz`
+- [ ] ≥ 90 % line coverage on `bossa_telemetry` and `bossa_sync` (follow-up)
 
 ### Estimated scope
 
@@ -181,38 +187,40 @@ on the Pi.
 
 ---
 
-## Phase 4 — Server and Database
+## Phase 4 — Remote Ingress (Cloudflare Worker + D1)
 
-**Goal:** `bossa-server` binary that accepts batched telemetry and writes to
-PostgreSQL.
+**Goal:** Accept batched telemetry from edge nodes into the existing Cloudflare
+SQL stack (D1), without standing up a separate PostgreSQL service.
+
+**Lean (July 2026):** Prefer **Cloudflare Workers + D1** over C++ `bossa-server` +
+PostgreSQL so the companion cloud project and BOSSA share one platform. The edge
+upload contract (`POST /api/v1/telemetry`) is unchanged; only the remote
+implementation moves.
 
 ### Work items
 
 | ID | Task | How |
 |----|------|-----|
-| 4.1 | `bossa-server` binary and CMake target | Separate entry point in `server/` |
-| 4.2 | REST API: `POST /api/v1/telemetry` | cpp-httplib; JSON validation |
-| 4.3 | Health endpoints | `/api/v1/health`, `/api/v1/health/ready` |
-| 4.4 | API key authentication | Bearer token; bcrypt hash in `edge_nodes` table |
-| 4.5 | `bossa::server::PgWriter` | libpqxx bulk insert with prepared statements |
-| 4.6 | SQL migration scripts | `config/migrations/001_initial.sql` per specification §10.2 |
-| 4.7 | Edge upload integration | `HttpUploader` posts real batches to `bossa-server` |
-| 4.8 | End-to-end test | Docker Compose: Pi or native edge → server → PostgreSQL |
-| 4.9 | TimescaleDB hypertable (optional) | `create_hypertable` migration if extension available |
-| 4.10 | systemd unit for `bossa-server` | `config/bossa-server.service` |
+| 4.1 | Worker route `POST /api/v1/telemetry` | Validate JSON; Bearer API key |
+| 4.2 | Health endpoints | `/api/v1/health`, `/api/v1/health/ready` (D1 ping) |
+| 4.3 | D1 schema + migrations | `edge_nodes`, `telemetry_points` (SQLite dialect) |
+| 4.4 | Idempotent insert | Replay-safe unique key; ignore duplicates |
+| 4.5 | Edge upload integration | Point `server.url` at Worker; real `HttpUploader` batches |
+| 4.6 | End-to-end test | Mock Worker or `wrangler dev` + curl from edge tests |
+| 4.7 | (Optional fallback) | Keep C++ `bossa-server` + PostgreSQL only if D1 limits block |
 
 ### Acceptance criteria
 
-- [ ] Edge node posts batch → row appears in `telemetry_points` table
-- [ ] Duplicate batch (replay) → `ON CONFLICT DO NOTHING`; no duplicate rows
-- [ ] Invalid API key → 401; edge retains batch
-- [ ] Server down → edge buffers in SQLite → uploads on recovery
-- [ ] Docker Compose CI job: server + PostgreSQL + curl test passes
-- [ ] Native and ARM64 builds pass
+- [ ] Edge node posts batch → row appears in D1 `telemetry_points`
+- [ ] Duplicate batch (replay) → no duplicate rows
+- [ ] Invalid API key → 401; edge retains batch in local SQLite
+- [ ] Worker down → edge buffers in SQLite → uploads on recovery
+- [ ] Native and ARM64 edge builds pass
 
 ### Estimated scope
 
-~25 files. PostgreSQL, libpqxx, cpp-httplib added as dependencies.
+Worker TypeScript (or companion repo) + D1 migrations; edge side is mostly config.
+Former C++ server stack is optional fallback, not the default path.
 
 ---
 
@@ -286,14 +294,14 @@ starts until the previous phase acceptance criteria are met.
 
 ---
 
-## Immediate Next Steps (Phase 2 kickoff)
+## Immediate Next Steps (Phase 3)
 
-Design and implementation plan: [phase-2-io-driver.md](phase-2-io-driver.md).
+Design and implementation plan: [phase-3-telemetry-pipeline.md](phase-3-telemetry-pipeline.md).
 
-1. Open GitHub issue: *"Phase 2 — I/O abstractions and BME280 driver"*
-2. Branch: `cursor/phase-2-io-driver-fc33`
-3. Deliver items 2.1–2.9 from Phase 2
-4. PR with acceptance criteria checklist; Pi 5 smoke test documented for human execution
+1. Branch: `cursor/phase-3-telemetry-pipeline-ae3a`
+2. Deliver items 3.1–3.9 (GTest; no Pi required)
+3. Leave Phase 2 Pi smoke as a follow-up when hardware is available
+4. Phase 4: Cloudflare Worker + D1 ingress (not C++ PostgreSQL by default)
 
 ---
 
