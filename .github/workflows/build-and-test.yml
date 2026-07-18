@@ -74,13 +74,68 @@ jobs:
 
       - name: Install cross-compilation toolchain
         run: |
+          set -euo pipefail
           sudo dpkg --add-architecture arm64
-          # arm64 packages come from ports.ubuntu.com, not archive.ubuntu.com
+
+          # archive/security.ubuntu.com have no arm64 indexes (404). Pin host
+          # sources to amd64, then add ports.ubuntu.com for arm64 only.
+          sudo python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          def pin_list(path: Path) -> None:
+              text = path.read_text()
+              if "ports.ubuntu.com" in text:
+                  return
+              lines = []
+              for line in text.splitlines():
+                  if line.startswith("deb ") and "[arch=" not in line:
+                      line = "deb [arch=amd64] " + line[len("deb "):]
+                  elif line.startswith("deb-src ") and "[arch=" not in line:
+                      line = "deb-src [arch=amd64] " + line[len("deb-src "):]
+                  lines.append(line)
+              path.write_text("\n".join(lines) + ("\n" if text.endswith("\n") else ""))
+
+          def pin_deb822(path: Path) -> None:
+              text = path.read_text()
+              if "ports.ubuntu.com" in text:
+                  return
+              stanzas = re.split(r"\n\s*\n", text.strip())
+              out = []
+              for stanza in stanzas:
+                  if not stanza.strip():
+                      continue
+                  if "Architectures:" in stanza:
+                      out.append(stanza)
+                      continue
+                  lines = stanza.splitlines()
+                  rewritten = []
+                  for line in lines:
+                      rewritten.append(line)
+                      if line.startswith("Types:"):
+                          rewritten.append("Architectures: amd64")
+                  out.append("\n".join(rewritten))
+              path.write_text("\n\n".join(out) + "\n")
+
+          sources_list = Path("/etc/apt/sources.list")
+          if sources_list.exists():
+              pin_list(sources_list)
+          for path in Path("/etc/apt/sources.list.d").glob("*"):
+              if path.suffix == ".list":
+                  pin_list(path)
+              elif path.suffix == ".sources":
+                  pin_deb822(path)
+          PY
+
           printf '%s\n' \
-            'deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble main universe restricted multiverse' \
-            'deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-updates main universe restricted multiverse' \
-            'deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-security main universe restricted multiverse' \
-            | sudo tee /etc/apt/sources.list.d/arm64-ports.list
+            'Types: deb' \
+            'URIs: http://ports.ubuntu.com/ubuntu-ports' \
+            'Suites: noble noble-updates noble-security' \
+            'Components: main universe restricted multiverse' \
+            'Architectures: arm64' \
+            'Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg' \
+            | sudo tee /etc/apt/sources.list.d/arm64-ports.sources >/dev/null
+
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
