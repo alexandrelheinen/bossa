@@ -1,11 +1,12 @@
 # Copilot Instructions for BOSSA
 
-GitHub Copilot and coding agents must follow [CONTRIBUTING.md](../CONTRIBUTING.md)
-as the authoritative development constitution (SDD, 4-level V-cycle, quality
-gates, embedded agent policy).
+This file is a bridge only. **Do not add rules here.**
 
-For coding conventions, see [docs/guidelines.md](../docs/guidelines.md).
+Shared engineering guidelines (method, writing, naming, C++/CMake/shell
+style) live in [.guidelines/](../.guidelines/), a git submodule. For
+BOSSA's own project context, embedded/hardware policy, and merge policy,
+read [CONTRIBUTING.md](../CONTRIBUTING.md). For BOSSA-specific coding
+notes, read [docs/guidelines.md](../docs/guidelines.md).
 
-Do not duplicate workflow rules in this file. If a request conflicts with
-CONTRIBUTING.md or the guidelines, prioritize those documents unless the user
-explicitly asks to change them.
+If a request conflicts with these documents, prioritize them unless the
+user explicitly asks to change them.
