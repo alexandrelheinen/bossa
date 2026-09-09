@@ -1,36 +1,35 @@
 # Contributing to BOSSA
 
-This document is the **single source of truth** for how humans and AI agents
-contribute to BOSSA (Base Operating System for Sensors and Actuators). It
-defines the development constitution: Specification-Driven Development (SDD), the
-4-level V-cycle software development lifecycle, embedded quality gates, and
-agent policy.
+This document is BOSSA's own project context: ecosystem, quality gates,
+embedded/hardware policy, and merge policy. Generic method (Spec-Driven
+Development, the V-cycle, TDD), writing, and naming guidelines live in
+[.guidelines/](.guidelines/), a shared submodule, not here.
 
-Do not duplicate these rules in other files. `AGENTS.md`, `CLAUDE.md`, and
-`.github/copilot-instructions.md` exist only as entry points that point here.
+Do not duplicate rules from the submodule in other files. `AGENTS.md`,
+`CLAUDE.md`, and `.github/copilot-instructions.md` exist only as entry
+points that point to `.guidelines/` and this file.
 
-For **coding conventions** (C++20 style, naming, Doxygen, embedded constraints),
-see [docs/guidelines.md](docs/guidelines.md). That file covers *how* code is
-written; this file covers *how work is planned, specified, verified, and merged*.
+For **coding conventions** (C++20 style, naming, Doxygen, embedded
+constraints), see [docs/guidelines.md](docs/guidelines.md) for what is
+specific to BOSSA, and
+[.guidelines/languages/cpp.md](.guidelines/languages/cpp.md) for the shared
+baseline. This file covers *how work is planned, verified, and merged*.
 
 ## Table of contents
 
 1. [Ecosystem context](#ecosystem-context)
 2. [Development setup](#development-setup)
-3. [Spec-driven development (SDD)](#spec-driven-development-sdd)
-4. [BOSSA development stages (4-level V-cycle)](#bossa-development-stages-4-level-v-cycle)
-5. [Combining SDD, V-cycle, and TDD](#combining-sdd-v-cycle-and-tdd)
-6. [Constraint layers for AI-assisted work](#constraint-layers-for-ai-assisted-work)
-7. [Requirement traceability](#requirement-traceability)
-8. [Quality gates](#quality-gates)
-9. [Definition of Ready and Definition of Done](#definition-of-ready-and-definition-of-done)
-10. [Pull request workflow](#pull-request-workflow)
-11. [Defensive programming](#defensive-programming)
-12. [Embedded contributions](#embedded-contributions)
-13. [Raspberry Pi 5 hardware validation](#raspberry-pi-5-hardware-validation)
-14. [Rules for AI agents](#rules-for-ai-agents)
-15. [Reference documents](#reference-documents)
-16. [Pre-merge checklist](#pre-merge-checklist)
+3. [Method](#method)
+4. [Requirement traceability](#requirement-traceability)
+5. [Quality gates](#quality-gates)
+6. [Definition of Ready and Definition of Done](#definition-of-ready-and-definition-of-done)
+7. [Pull request workflow](#pull-request-workflow)
+8. [Defensive programming](#defensive-programming)
+9. [Embedded contributions](#embedded-contributions)
+10. [Raspberry Pi 5 hardware validation](#raspberry-pi-5-hardware-validation)
+11. [Rules for AI agents](#rules-for-ai-agents)
+12. [Reference documents](#reference-documents)
+13. [Pre-merge checklist](#pre-merge-checklist)
 
 ---
 
@@ -109,218 +108,35 @@ bash scripts/check/pre_push.sh --skip-cross # formatting + native build + tests 
 
 ---
 
-## Spec-driven development (SDD)
+## Method
 
-**Spec-driven development** treats written specifications—not code—as the
-primary artifact. Code, tests, and design notes are derived from and validated
-against those specs.
+Spec-Driven Development, the V-cycle, and TDD are defined once in
+[.guidelines/workflow/sdd.md](.guidelines/workflow/sdd.md),
+[.guidelines/workflow/integration.md](.guidelines/workflow/integration.md),
+and [.guidelines/workflow/tdd.md](.guidelines/workflow/tdd.md). Follow
+those. BOSSA's own additions:
 
-In BOSSA, the **project-level specification** lives in `docs/specification.md`
-and `docs/roadmap.md`. Each **feature-level specification** is a GitHub issue
-or PR description with concrete acceptance criteria.
+- The project-level specification lives in `docs/specification.md` and
+  `docs/roadmap.md`; a feature-level spec is a GitHub issue or PR
+  description with acceptance criteria.
+- Default rigor level: spec-first minimum, spec-anchored when module
+  boundaries, driver interfaces, or sync policies change.
+- The V-cycle's four levels map to concrete BOSSA locations:
 
-### What a spec must contain
+  | Level | Artifact | BOSSA location | Verification |
+  | --- | --- | --- | --- |
+  | 1 — Functional | Goals, sync policies, driver behavior, server API contract | `docs/specification.md`, `docs/roadmap.md` | Pi 5 smoke test, Worker + D1 end-to-end |
+  | 2 — Architecture | Module decomposition, driver interface, sync engine, REST API | `README.md § Architecture`, `docs/specification.md` §5-10 | Cross-compilation succeeds, API contract tests |
+  | 3 — Module API | Public APIs: class declarations, Doxygen, stub bodies | `include/bossa/<module>/` | GTest unit tests written with the stubs, in `tests/` mirroring `include/bossa/` |
+  | 4 — Implementation | Algorithms, driver adapters, Worker/D1 wiring | `src/`, `drivers/`, `workers/` | Full test suite, coverage >= 90%, Pi 5 smoke test |
 
-Before implementation starts, the spec for a change must be clear enough that an
-independent reviewer (human or agent) could verify completion without guessing
-intent:
-
-| Element | Purpose | Where it lives |
-| --- | --- | --- |
-| **Intent** | Why the change exists | Issue title/body or PR summary |
-| **Scope** | What is in and out of bounds | Issue or PR description |
-| **Acceptance criteria** | Observable conditions of done | Issue checklist or PR test plan |
-| **Traceability** | Link to `FR-*` / roadmap phase when applicable | Issue, PR, or test comments |
-| **Constraints** | Non-negotiable rules (embedded, signal safety, no hot-path alloc) | This file + [docs/guidelines.md](docs/guidelines.md) |
-| **Design notes** | Interfaces, modules, edge cases (when non-trivial) | PR description or `docs/specification.md` |
-
-Write acceptance criteria in concrete, testable language (EARS-style: "When …,
-the system shall …"). Ambiguous specs produce ambiguous code—refine the spec
-before coding.
-
-### SDD workflow in this repo
-
-1. **Specify** — Capture intent, scope, and acceptance criteria in a GitHub
-   issue. Map criteria to a [roadmap](docs/roadmap.md) phase and
-   [specification](docs/specification.md) section when the change touches
-   functional behavior.
-2. **Plan** — For non-trivial work, identify which V-cycle levels are affected,
-   which `docs/` files may need updates, and which test levels apply (unit /
-   integration / hardware smoke).
-3. **Task** — Break the plan into focused commits. Each commit addresses one
-   logical step and traces back to at least one acceptance criterion.
-4. **Implement and verify** — Follow the V-cycle at each level: stubs and tests
-   before implementation where applicable; run quality gates locally before push.
-5. **Review** — PR review checks that code matches the spec and that tests prove
-   the acceptance criteria. **Humans merge; agents do not.**
-
-### Rigor levels
-
-| Level | When to use | Spec artifact |
-| --- | --- | --- |
-| **Spec-first** | Any merged change | Issue or PR with acceptance criteria |
-| **Spec-anchored** | Public API, architecture, or `docs/` changes | Above + design notes and test plan |
-| **Spec-as-source** | Large or AI-assisted features | Above + explicit task breakdown before coding |
-
-Default for BOSSA: **spec-first** minimum; **spec-anchored** when module
-boundaries, driver interfaces, or sync policies change.
-
-### Rules
-
-- Do not implement without a written spec (issue scope or PR description with
-  acceptance criteria).
-- When requirements change mid-task, update the spec first, then code and tests.
-- Regressions: extend the spec with a failing test that encodes the bug, then fix.
-- Do not add duplicate workflow documentation outside this file and
-  [docs/guidelines.md](docs/guidelines.md).
-
-Further reading:
-[GitHub Spec Kit — Spec-Driven Development](https://github.com/github/spec-kit/blob/main/spec-driven.md),
-[SDD and agentic AI for production-quality code](https://alexandrelheinen.pages.dev/articles/2026-04-22-ai-agents-sdd/)
-(author's article on constraint layers and the SDD V-cycle).
-
----
-
-## BOSSA development stages (4-level V-cycle)
-
-BOSSA uses a **4-level V-cycle** as its software development lifecycle. Each
-level has a descending artifact (specification or design) and an ascending
-validation method. **Both sides of a level must be addressed before moving to the
-next.**
-
-An imperative order (implement, add, fix…) always implies the **full V-cycle**—not
-just the code.
-
-```
-Level 1 — Functional specification  ◄──────────────►  Acceptance / hardware validation
-  Level 2 — Architecture & interfaces  ◄──────────►  Cross-compile + API contract tests
-    Level 3 — Module stubs & public API  ◄────────►  GTest unit tests (native x86_64)
-      Level 4 — Implementation & private code  ◄──►  Full CI + Pi 5 smoke tests
-```
-
-For agile delivery, treat each GitHub issue as one complete V (the **W-cycle**:
-chained small V-cycles). The next task starts from the verified output of the
-previous one.
-
-### Level 1 — Functional specifications
-
-| Side | Artifact | BOSSA location |
-| --- | --- | --- |
-| **Specify** | Goals, sync policies, driver behavior, server API contract | [docs/specification.md](docs/specification.md), [docs/roadmap.md](docs/roadmap.md) phase criteria |
-| **Verify** | Observable pass criteria on hardware or integration tests | Pi 5 smoke test, Worker + D1 end-to-end |
-
-**Rule:** No Level 2 work on new behavior until the relevant specification
-section and roadmap acceptance criteria exist.
-
-**Validation:** Deploy to Pi 5; verify syslog output, edge SQLite rows, or D1
-inserts as appropriate.
-
-### Level 2 — Architecture and interfaces
-
-| Side | Artifact | BOSSA location |
-| --- | --- | --- |
-| **Specify** | Module decomposition, driver interface, sync engine, REST API | [README.md § Architecture](../README.md#architecture-overview), [docs/specification.md](docs/specification.md) §5–10 |
-| **Verify** | Cross-compilation succeeds; API contract tests pass | `.github/workflows/build-and-test.yml` |
-
-**Rule:** No Level 3 work on a new module boundary until
-[docs/specification.md](docs/specification.md) defines the public interface.
-
-### Level 3 — Module stubs and unit tests
-
-| Side | Artifact | BOSSA location |
-| --- | --- | --- |
-| **Specify** | Public APIs: class declarations, Doxygen, stub bodies | `include/bossa/<module>/` |
-| **Verify** | GTest unit tests written **with** the stubs | `tests/` (mirrors `include/bossa/`) |
-
-Use `GTEST_SKIP()` or disabled tests with a documented reason for methods not yet
-implemented. Enable tests when Level 4 fills the stub.
-
-**CI gates:** `.github/workflows/build-and-test.yml` (native build + `ctest`).
-
-**Rule:** Header + test files for a module land in the same commit. Hardware is
-mocked—never require a Pi for unit tests.
-
-### Level 4 — Implementation
-
-| Side | Artifact | BOSSA location |
-| --- | --- | --- |
-| **Specify** | Algorithms, driver adapters, Worker/D1 wiring | `src/`, `drivers/`, `workers/` |
-| **Verify** | Full test suite, coverage ≥ 90%, Pi 5 smoke test | All CI workflows + hardware |
-
-**Rule:** A feature is not done until CI is green and the relevant acceptance
-criteria pass (unit tests on x86_64, cross-compile, and Pi smoke when I/O is
-involved).
-
-### SDD mapping to the V-cycle (GitHub workflow)
-
-| V side | GitHub artifact | Agent / human action |
-| --- | --- | --- |
-| Left — Specify | **Issue** | What must be done, edge cases, tests that must pass (DoD) |
-| Left — Design | **Issue + `docs/`** | Architecture notes, specification updates when needed |
-| Right — Verify | **PR + CI** | GTest, formatting, native build, cross-compile |
-| Right — Accept | **Human merge** | Review CI, hardware logs, D1 rows when applicable |
-
-At the base of the V, the **agent loop** runs locally before each commit:
-format → build → test → cross-compile → fix until green.
-
----
-
-## Combining SDD, V-cycle, and TDD
-
-SDD, the V-cycle, and test-driven development (TDD) operate at different layers.
-Use them together in this order:
-
-```
-SDD (what & why)  →  V-cycle (structure each level)  →  TDD (build each unit)
-     spec                 design ↔ tests                    red → green → refactor
-```
-
-| Step | Method | Activity |
-| --- | --- | --- |
-| 1 | **SDD** | Write intent, scope, acceptance criteria |
-| 2 | **V-cycle** | Map criteria to test levels (hardware → integration → unit) |
-| 3 | **V-cycle** | Update architecture / specification when boundaries change |
-| 4 | **TDD** | At Level 3–4: failing GTest → minimal code → refactor |
-| 5 | **V-cycle** | Run tests bottom-up; CI must pass |
-| 6 | **SDD** | Update spec/docs if behavior changed; PR proves all criteria |
-
-**TDD rules** (Kent Beck): do not write production code without a failing test;
-eliminate duplication. TDD executes **detailed design** at Level 3–4—it does not
-replace hardware smoke or integration specs from Level 1–2.
-
-**Pause and re-spec** when acceptance criteria are ambiguous, scope grows beyond
-the issue, or hardware tests reveal an unspecified requirement.
-
----
-
-## Constraint layers for AI-assisted work
-
-To get production-quality output from coding agents, BOSSA uses three constraint
-layers (described in detail in the
-[SDD article](https://alexandrelheinen.pages.dev/articles/2026-04-22-ai-agents-sdd/)).
-Together they make hallucination visible and expensive to ignore.
-
-### Layer 1 — Agent instructions (point to this file)
-
-`AGENTS.md`, `CLAUDE.md`, and `.github/copilot-instructions.md` must **only**
-direct agents to this document and [docs/guidelines.md](docs/guidelines.md).
-Keep them short. Models have limited context—essential rules live here, not
-scattered across ten files.
-
-### Layer 2 — CI/CD quality gates
-
-Automated checks enforce the method for humans and agents alike. No weakening
-gates to make CI green. See [Quality gates](#quality-gates).
-
-Agents must run local validation (`scripts/check/pre_push.sh` or equivalent
-steps) before pushing.
-
-### Layer 3 — Human merge
-
-Every change is merged by a maintainer after reviewing CI results and, when
-relevant, hardware evidence (syslog traces, D1 query results, oscilloscope
-or logic-analyzer captures for timing-critical I/O). The agent does not decide
-when work is done.
+  Rule: no work at a level starts until that level's artifact exists (no
+  Level 2 work on new behavior until the spec section and roadmap
+  acceptance criteria exist; no Level 3 work on a new module boundary
+  until `docs/specification.md` defines the public interface).
+- Agent instruction files (`AGENTS.md`, `CLAUDE.md`,
+  `.github/copilot-instructions.md`) must only point to `.guidelines/` and
+  this document, per [.guidelines/agents/context.md](.guidelines/agents/context.md).
 
 ---
 
@@ -380,12 +196,13 @@ cd build && ctest --output-on-failure -V
 
 ### Coverage and style
 
-- GTest coverage target: **≥ 90%** on `bossa_core`, `bossa_telemetry`, `bossa_sync`,
-  `bossa_server` (when those libraries exist)
-- C++: Doxygen on public APIs, `clang-format` (LLVM style, C++20)
-- Physical variables: `who_what` naming per [docs/guidelines.md](docs/guidelines.md)
-- Embedded: no exceptions or heap allocation in hot paths (scheduler, `read()`,
-  `write()`, signal handlers)
+- GTest coverage target: **>= 90%** on `bossa_core`, `bossa_telemetry`,
+  `bossa_sync`, `bossa_server` (when those libraries exist).
+- Embedded: no exceptions or heap allocation in hot paths (scheduler,
+  `read()`, `write()`, signal handlers).
+- Formatting, Doxygen, and naming follow
+  [.guidelines/languages/cpp.md](.guidelines/languages/cpp.md) and
+  [.guidelines/style/naming.md](.guidelines/style/naming.md).
 
 ---
 
@@ -419,40 +236,15 @@ cd build && ctest --output-on-failure -V
 1. Branch from `main` with a descriptive name (e.g. `feat/bme280-driver`,
    `fix/scheduler-deadline`).
 2. Make **focused commits**—one logical step each.
-3. Open a PR against `main` with:
-   - **Summary** — what changed and why (1–3 bullets).
-   - **Test plan** — checklist of automated and manual verification.
+3. Open a PR (see [.guidelines/templates/pr.md](.guidelines/templates/pr.md)
+   for the base template) with two BOSSA-specific fields added:
    - **Traceability** — `FR-*` / roadmap phase references when applicable.
    - **Hardware plan** — Pi 5 smoke steps when I/O is involved.
 4. Ensure CI is green before requesting review.
 5. Address feedback in new commits (avoid force-push to `main`).
 
-### Commit messages
-
-Follow [Conventional Commits](https://www.conventionalcommits.org/):
-
-```
-<type>(<scope>): <imperative subject>
-
-<body>
-
-<footer>
-```
-
-Types: `feat`, `fix`, `docs`, `test`, `refactor`, `style`, `chore`, `build`, `ci`
-
-Example:
-
-```
-feat(drivers): add BME280 I2C driver adapter
-
-Implement bossa::drivers::Bme280Driver with mock I2C unit tests.
-Validates FR-DRV-01 and Phase 2 acceptance criteria.
-
-Tested on Raspberry Pi 5 with sensor at 0x76.
-
-Closes #12
-```
+Commit format follows
+[.guidelines/workflow/commits.md](.guidelines/workflow/commits.md).
 
 ---
 
@@ -642,101 +434,59 @@ must:
 ## Rules for AI agents
 
 These rules apply to Cursor agents, Copilot, Claude Code, and any automated
-contributor.
-
-### Context and intent
-
-- Infer intent from the full conversation and issue scope, not only the latest message.
-- Treat mid-task messages as refinements unless the user clearly changes direction.
-- Read **this file** before making changes; it supersedes generic model habits.
-
-### Scope and files
-
-- Do not duplicate workflow rules in new markdown files.
-- Do not edit unrelated files unless explicitly asked.
-- An imperative order (implement, add, fix…) implies the **full V-cycle**, not code alone.
+contributor. General agent behavior (evidence, no fabrication, git safety,
+communication) follows
+[.guidelines/agents/claude.md](.guidelines/agents/claude.md). BOSSA adds:
 
 ### Execution order
 
-1. **SDD** — Confirm spec / acceptance criteria exist.
-2. **V-cycle** — Identify level; update `docs/` when Level 1–2 change.
-3. **Level 3** — Headers + GTest together when adding APIs. Mock all hardware.
-4. **Level 4** — Implement; run `scripts/check/pre_push.sh` (or `--skip-cross`
+1. Confirm the spec / acceptance criteria exist for the V-cycle level being
+   touched; update `docs/` when Level 1-2 changes.
+2. Headers + GTest together when adding APIs (Level 3). Mock all hardware.
+3. Implement (Level 4); run `scripts/check/pre_push.sh` (or `--skip-cross`
    when iterating).
-5. **PR** — Push only after `scripts/check/formatting.sh` passes; ensure CI
-   green; document Pi smoke for I/O changes.
+4. Push only after `scripts/check/formatting.sh` passes; ensure CI green;
+   document Pi smoke for I/O changes.
 
 ### Embedded-specific rules
 
-- **No heap allocation** in `read()`, `write()`, scheduler loop, or ring buffer.
+- **No heap allocation** in `read()`, `write()`, scheduler loop, or ring
+  buffer.
 - **No exceptions** in hot paths or signal handlers.
-- **Mock hardware** in unit tests—use `bossa::io` virtual interfaces.
+- **Mock hardware** in unit tests, use `bossa::io` virtual interfaces.
 - **syslog** for daemon logging, not `std::cout`.
-- **Check system call return values**; log failures at `LOG_ERR`.
 - **Cross-compile** every PR that changes production code.
-
-### Git safety
-
-- Never force-push to `main`.
-- Never skip hooks unless explicitly requested.
-- Never commit secrets (API keys, database passwords).
-- Create commits when completing work that implies a PR.
-
-### Communication
-
-- Be precise; use code citations when referencing existing code.
-- Keep responses proportional to task complexity.
 
 ---
 
 ## Reference documents
 
-When an external guide conflicts with this file or [docs/guidelines.md](docs/guidelines.md),
-**this repository wins**.
-
-### BOSSA specifications
+When an external guide conflicts with this file, `.guidelines/`, or
+[docs/guidelines.md](docs/guidelines.md), **this repository wins**.
 
 | Document | Role |
 | --- | --- |
+| [.guidelines/](.guidelines/) | Shared method, writing, naming, and per-language style (submodule) |
 | [docs/specification.md](docs/specification.md) | Technical requirements, APIs, libraries, schemas |
 | [docs/roadmap.md](docs/roadmap.md) | Phased delivery plan and acceptance criteria |
 | [README.md § Architecture](../README.md#architecture-overview) | Level 2 — system design |
-| [docs/guidelines.md](docs/guidelines.md) | C++ coding standards and formatting |
-
-### Methodology (external)
-
-| Topic | Resource |
-| --- | --- |
-| SDD | [GitHub Spec Kit — spec-driven.md](https://github.com/github/spec-kit/blob/main/spec-driven.md) |
-| SDD + agents | [Author article — SDD and agentic AI](https://alexandrelheinen.pages.dev/articles/2026-04-22-ai-agents-sdd/) |
-| V-model | [Teaching Agile — V-Model](https://teachingagile.com/sdlc/models/v-model) |
-| TDD | [Kent Beck — Canon TDD](https://newsletter.kentbeck.com/p/canon-tdd) |
-| FRET constitution | [FRET CONTRIBUTING.md](https://github.com/alexandrelheinen/fret/blob/main/CONTRIBUTING.md) |
-| libgpiod | [libgpiod documentation](https://git.kernel.org/pub/scm/libs/libgpiod/libgpiod.git/about/) |
-| Embedded Linux | Love, R. — *Linux System Programming* |
+| [docs/guidelines.md](docs/guidelines.md) | BOSSA-specific coding notes |
 
 ---
 
 ## Pre-merge checklist
 
-Every contributor (human or agent) must confirm before merge:
+Every contributor (human or agent) must confirm before merge, beyond the
+shared [.guidelines/templates/pr.md](.guidelines/templates/pr.md) checklist:
 
-- [ ] Spec is clear: intent, scope, and acceptance criteria addressed.
-- [ ] Work follows SDD → V-cycle → TDD at the appropriate levels.
 - [ ] `FR-*` / roadmap traceability updated when behavior changed.
-- [ ] `bash scripts/check/formatting.sh` passes.
-- [ ] `./scripts/build.sh` passes (native x86_64).
+- [ ] `./scripts/build.sh` passes (native x86_64) and
+      `./scripts/build.sh -t toolchain-arm64.cmake` passes.
 - [ ] `ctest` passes when `tests/` is populated.
-- [ ] `./scripts/build.sh -t toolchain-arm64.cmake` passes.
-- [ ] CI green on the PR branch.
-- [ ] Documentation updated when specs or public APIs changed.
-- [ ] No quality gate weakened to pass.
-- [ ] No secrets committed.
-- [ ] Public APIs documented with Doxygen.
 - [ ] Pi 5 smoke documented or executed when I/O changed.
 - [ ] No exceptions or heap allocation introduced in hot paths.
 
-If any item fails, fix forward—do not merge.
+If any item fails, fix forward, do not merge.
 
 ---
 
