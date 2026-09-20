@@ -5,8 +5,6 @@ components interact, and which third-party libraries are adopted. It complements
 the [coding guidelines](guidelines.md) (how to write code) with architectural and
 behavioral requirements (what to build).
 
-**Status:** Draft v0.1 — April 2026 baseline, updated July 2026.
-
 ---
 
 ## 1. Goals and Non-Goals
@@ -263,6 +261,16 @@ database_id = "<d1-database-id>"
 namespace bossa::drivers {
 
 /**
+ * @brief Fixed-capacity result from Driver::read() — no heap growth in hot path.
+ */
+struct ReadResult {
+  static constexpr std::size_t kMaxSamples = 8;
+
+  std::array<telemetry::Sample, kMaxSamples> samples{};
+  std::size_t sample_count{0};
+};
+
+/**
  * @brief Hardware driver interface.
  *
  * Every sensor or actuator adapter implements this class. Drivers must not
@@ -273,7 +281,7 @@ class Driver {
   virtual ~Driver() = default;
 
   /** @brief Unique driver type name, e.g. "bme280". */
-  virtual std::string name() const = 0;
+  virtual std::string_view name() const = 0;
 
   /**
    * @brief One-time setup from YAML parameters block.
@@ -283,9 +291,9 @@ class Driver {
 
   /**
    * @brief Read current samples from hardware.
-   * @return One Sample per logical channel this driver exposes.
+   * @return Fixed-capacity array of Samples for channels this driver exposes.
    */
-  virtual std::vector<telemetry::Sample> read() = 0;
+  virtual ReadResult read() = 0;
 
   /**
    * @brief Execute an actuator command.
@@ -344,17 +352,29 @@ Pattern for integrating a vendor C++ driver (e.g. Adafruit BME280 library):
 
 ```cpp
 namespace bossa::telemetry {
-
-struct Sample {
-  std::string channel_id;
-  double value;
-  std::chrono::system_clock::time_point timestamp;
-  std::string unit;           // physical quantity: "celsius", "percent", "pascal"
-  SampleQuality quality;      // good, uncertain, bad
-};
-
+ 
 enum class SampleQuality { kGood, kUncertain, kBad };
-
+ 
+struct Sample {
+  std::string_view channel_id;
+  double value{0.0};
+  std::chrono::system_clock::time_point timestamp{};
+  std::string_view unit;           // physical quantity: "celsius", "percent", "pascal"
+  SampleQuality quality{SampleQuality::kGood};
+};
+ 
+struct StoredSample {
+  static constexpr std::size_t kMaxChannelIdLength = 63;
+  static constexpr std::size_t kMaxUnitLength = 31;
+ 
+  char channel_id[kMaxChannelIdLength + 1]{};
+  char unit[kMaxUnitLength + 1]{};
+  double value{0.0};
+  std::chrono::system_clock::time_point timestamp{};
+  SampleQuality quality{SampleQuality::kGood};
+  Priority priority{Priority::kNormal};
+};
+ 
 }  // namespace bossa::telemetry
 ```
 
@@ -572,15 +592,15 @@ target_link_libraries(bossa-daemon PRIVATE bossa_core bossa_io ...)
 
 ---
 
-## 16. Open Decisions
-
-| Topic | Current lean | Decision needed by |
-|-------|-------------|-------------------|
-| Remote store platform | **BOSSA Worker + D1 (SQLite only)** | Decided |
-| Config hot-reload (`SIGHUP`) | Yes — implemented in Phase 3 | Done |
-| MQTT bridge priority | Phase 5, optional / parked | Phase 5 planning |
-| Multi-tenancy on ingress | Single-tenant v1; add `tenant_id` later if needed | Before production deploy |
-| D1 vs Durable Object SQLite | **D1** for shared telemetry; DO only if per-node isolation needed | Phase 4 design |
+## 16. Architectural Decisions
+ 
+| Topic | Decision / State | Rationale |
+|---|---|---|
+| Remote store platform | **BOSSA Worker + D1 (SQLite only)** | Uniform SQLite stack across edge and cloud |
+| Config hot-reload (`SIGHUP`) | **Implemented (Phase 3)** | Reconfigures scheduler rates without restart |
+| Edge offline buffer | **SQLite 3 (WAL mode)** | Persistent queue for transient network failures |
+| MQTT bridge priority | **Phase 5 (optional / parked)** | Not required for v1 telemetry pipeline |
+| Multi-tenancy on ingress | **Single-tenant v1** | Add `tenant_id` if multi-tenancy is required |
 
 ---
 

@@ -5,9 +5,6 @@
 
 #include "bossa/io/linux_i2c_bus.hpp"
 
-#include <cerrno>
-#include <cstring>
-
 #include <fcntl.h>
 #include <linux/i2c-dev.h>
 #include <linux/i2c.h>

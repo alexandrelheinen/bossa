@@ -6,7 +6,6 @@
 #include "bossa/runtime/telemetry_runtime.hpp"
 
 #include <algorithm>
-#include <cmath>
 #include <fstream>
 #include <iterator>
 #include <syslog.h>

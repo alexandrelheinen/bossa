@@ -7,11 +7,9 @@
 
 #include <cstdint>
 #include <functional>
-#include <optional>
 #include <span>
 #include <string>
 #include <unordered_map>
-#include <vector>
 
 #include "bossa/io/i2c_bus.hpp"
 

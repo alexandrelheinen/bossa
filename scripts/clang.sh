@@ -10,9 +10,9 @@ if ! command -v clang-format &> /dev/null; then
     exit 1
 fi
 
-# Format all .cpp and .h files in src/, include/, and tests/
+# Format all .cpp and .h files in src/, include/, tests/, and drivers/
 echo -e "Formatting the \e[34m${PROJECT_NAME}\e[0m files..."
-for file in $(find "${PROJECT_DIR}/include" "${PROJECT_DIR}/src" "${PROJECT_DIR}/tests" -type f \( -name "*.cpp" -o -name "*.h" -o -name "*.hpp" \)); do
+for file in $(find "${PROJECT_DIR}/include" "${PROJECT_DIR}/src" "${PROJECT_DIR}/tests" "${PROJECT_DIR}/drivers" -type f \( -name "*.cpp" -o -name "*.h" -o -name "*.hpp" \)); do
     echo "-- ${file}"
     clang-format -i "$file"
 done

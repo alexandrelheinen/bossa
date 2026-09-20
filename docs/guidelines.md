@@ -71,11 +71,11 @@ enable once the stub is filled.
 - Abstract hardware interfaces behind clean APIs (dependency injection /
   factory patterns for testability), e.g.:
   ```cpp
-  class IGPIOController {
+  class GpioController {
   public:
-      virtual ~IGPIOController() = default;
-      virtual bool read_pin(int pin) = 0;
-      virtual void write_pin(int pin, bool value) = 0;
+      virtual ~GpioController() = default;
+      virtual bool read_line(std::uint32_t offset, GpioValue *value) = 0;
+      virtual bool write_line(std::uint32_t offset, GpioValue value) = 0;
   };
   ```
 
@@ -90,7 +90,7 @@ for the full error-handling-by-layer policy this section builds on.
   dependencies in README; use `find_package()` for third-party libraries.
 - Cross-compilation via CMake toolchain files (e.g. `toolchain-arm64.cmake`);
   test toolchain files regularly to avoid drift. Cross-compiled binaries
-  go to `build/final/bin/bossa`.
+  go to `build/final/bin/bossa-daemon`.
 
 ## 5. systemd Integration
 

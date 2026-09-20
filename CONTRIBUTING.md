@@ -254,9 +254,9 @@ BOSSA runs on embedded Linux where failures are costly and hard to debug.
 **Defensive programming** means assuming inputs, hardware, and the environment
 can fail — and handling those failures explicitly at the point they occur.
 
-This section is the project-wide policy. Phase-specific notes (for example
-[docs/phase-1-core-runtime.md](docs/phase-1-core-runtime.md)) apply the same
-rules to concrete modules.
+This section is the project-wide policy. Module-specific notes (for example
+in [docs/guidelines.md](docs/guidelines.md)) apply the same rules to concrete
+modules.
 
 ### Principles
 

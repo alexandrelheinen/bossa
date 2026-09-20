@@ -176,6 +176,7 @@ For Phase 2 hardware acceptance, `bossa-bme280-smoke` remains the dedicated poll
 
 ## Related documents
 
-- [Phase 2 design](../phase-2-io-driver.md)
+- [Roadmap](../roadmap.md)
+- [Specification](../specification.md)
 - [Contributing — Pi 5 hardware validation](../../CONTRIBUTING.md#raspberry-pi-5-hardware-validation)
 - [Unit test script](../../scripts/test/unit.sh) (GTest on dev host, not CI)

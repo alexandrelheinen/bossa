@@ -6,7 +6,6 @@
 #include <atomic>
 #include <chrono>
 #include <csignal>
-#include <fstream>
 #include <thread>
 
 #include <gtest/gtest.h>
