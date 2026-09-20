@@ -8,57 +8,31 @@ Technical details (APIs, libraries, schemas) are in the
 [specification](specification.md). Coding conventions are in
 [guidelines](guidelines.md).
 
-**Last updated:** July 2026.
-
----
-
-## Vision
-
-BOSSA becomes the standard edge-and-server stack for IoT deployments in the
-Alexandre Loeblein Heinen project ecosystem:
-
-- **Edge:** plug in C++ drivers, declare what to sample and sync, deploy to Pi.
-- **Cloud:** ingest telemetry via a BOSSA Cloudflare Worker into D1 (SQLite),
-  for companion apps to consume.
-- **Modular:** new hardware is a driver adapter, not a fork of the framework.
-
----
-
 ## Phase Overview
 
-| Phase | Name | Outcome | Depends on |
-|-------|------|---------|------------|
-| 0 | Foundation | Daemon skeleton, build, CI | — |
-| 1 | Core runtime | Tested Service, config, scheduler | Phase 0 |
-| 2 | I/O and first driver | GPIO/I2C abstractions + one real sensor | Phase 1 |
-| 3 | Telemetry pipeline | Ring buffer, SQLite, sync policy | Phase 2 |
-| 4 | Worker and D1 | REST ingress, D1 (SQLite) writer | Phase 3 |
-| 5 | Plugins and integrations | Dynamic drivers, MQTT bridge, cloud alignment | Phase 4 |
+| Phase | Name | Status | Outcome | Depends on |
+|---|---|---|---|---|
+| 0 | Foundation | Complete | Daemon skeleton, build, CI | — |
+| 1 | Core runtime | Complete | Tested Service, config, scheduler | Phase 0 |
+| 2 | I/O and first driver | Complete (HW paused) | GPIO/I2C abstractions + BME280 sensor | Phase 1 |
+| 3 | Telemetry pipeline | Complete | Ring buffer, SQLite, sync policy | Phase 2 |
+| 4 | Worker and D1 | Next | REST ingress, D1 (SQLite) writer | Phase 3 |
+| 5 | Plugins and integrations | Planned | Dynamic drivers, MQTT bridge, cloud alignment | Phase 4 |
 
 ```mermaid
-gantt
-    title BOSSA delivery phases
-    dateFormat YYYY-MM
-    axisFormat %b %Y
+flowchart LR
+    P0[Phase 0: Foundation] --> P1[Phase 1: Core runtime]
+    P1 --> P2[Phase 2: I/O and driver]
+    P2 --> P3[Phase 3: Telemetry pipeline]
+    P3 --> P4[Phase 4: Worker and D1]
+    P4 --> P5[Phase 5: Plugins and cloud]
 
-    section Foundation
-    Phase 0 – Foundation           :done,    p0, 2026-03, 2026-04
-
-    section Core
-    Phase 1 – Core runtime         :done,    p1, 2026-07, 2026-08
-
-    section Hardware
-    Phase 2 – I/O and driver       :done,    p2, 2026-08, 2026-09
-    Phase 2 – Pi smoke (paused)    :         p2h, after p2, 2026-09, 2026-10
-
-    section Pipeline
-    Phase 3 – Telemetry pipeline   :active,  p3, 2026-09, 2026-10
-
-    section Server
-    Phase 4 – Cloudflare D1 ingest :         p4, 2026-10, 2026-11
-
-    section Integrations
-    Phase 5 – Plugins and cloud    :         p5, 2026-11, 2026-12
+    style P0 fill:#2ea44f,stroke:#2ea44f,color:#fff
+    style P1 fill:#2ea44f,stroke:#2ea44f,color:#fff
+    style P2 fill:#2ea44f,stroke:#2ea44f,color:#fff
+    style P3 fill:#2ea44f,stroke:#2ea44f,color:#fff
+    style P4 fill:#0366d6,stroke:#0366d6,color:#fff
+    style P5 fill:#6a737d,stroke:#6a737d,color:#fff
 ```
 
 ---
@@ -121,22 +95,22 @@ build into libraries, and establish the test infrastructure.
 **Goal:** Virtual hardware interfaces with mocks, one real sensor driver end-to-end
 on the Pi.
 
-**Status (July 2026):** Items 2.1–2.9 are implemented and merged. GTest + no-heap
+**Status:** Software implementation is complete and merged. GTest + no-heap
 `read()` acceptance are met. **Pi 5 + BME280 smoke is paused** until hardware is
-available again; Phase 3 proceeds without it. Smoke guide remains
+available again. Smoke guide remains
 [docs/hardware/pi5-bme280-smoke-test.md](hardware/pi5-bme280-smoke-test.md).
 
 ### Work items
 
 | ID | Task | How |
-|----|------|-----|
+|---|---|---|
 | 2.1 | `bossa::io::GpioController` interface | Virtual `read_line()`, `write_line()`, `request_line()` |
 | 2.2 | `bossa::io::LibgpiodGpio` implementation | libgpiod v2 character-device backend |
 | 2.3 | `bossa::io::I2cBus` interface + Linux backend | `/dev/i2c-*` via `ioctl` |
 | 2.4 | Mock I/O for tests | `MockGpio`, `MockI2cBus` in `tests/mocks/` |
 | 2.5 | `bossa::drivers::Driver` interface | Per specification §7 |
 | 2.6 | `bossa::drivers::Registry` | Static registration macro `BOSSA_REGISTER_DRIVER` |
-| 2.7 | First driver: BME280 (or SHT31) | Thin adapter over I2C; temperature + humidity channels |
+| 2.7 | First driver: BME280 | Thin adapter over I2C; temperature + humidity channels |
 | 2.8 | Driver unit tests | Mock I2C returns canned register bytes; verify `Sample` values |
 | 2.9 | Rename binary to `bossa-daemon` | Update systemd unit, sync script, CI |
 
@@ -148,27 +122,23 @@ available again; Phase 3 proceeds without it. Smoke guide remains
 - [x] No heap allocation in `Driver::read()` (verified by test or audit)
 - [x] libgpiod added to `scripts/setup.sh` and documented in specification
 
-### Estimated scope
-
-~25 files. Requires Pi 5 + BME280 for hardware validation.
-
 ---
 
-## Phase 3 — Telemetry Pipeline
+## Phase 3 — Telemetry Pipeline ✅ Complete
 
 **Goal:** Scheduler, ring buffer, SQLite local store, and declarative sync policy.
 
 ### Work items
 
 | ID | Task | How |
-|----|------|-----|
+|---|---|---|
 | 3.1 | `bossa::telemetry::Sample` and `Channel` types | Per specification §8 |
 | 3.2 | `bossa::telemetry::RingBuffer` | Fixed capacity, no alloc in hot path |
 | 3.3 | `bossa::telemetry::Scheduler` | Deadline-based polling (service-loop tick) |
 | 3.4 | Full YAML channel + sync config parsing | Per specification §6 |
 | 3.5 | `bossa::storage::LocalStore` (SQLite) | `pending_uploads` table; WAL mode |
 | 3.6 | `bossa::sync::UploadPolicy` | Evaluate `batch`, `realtime`, `on_change` modes |
-| 3.7 | `bossa::sync::HttpUploader` stub | libcurl POST to configurable URL; mock in tests |
+| 3.7 | `bossa::sync::HttpUploader` | libcurl POST to configurable URL; mock in tests |
 | 3.8 | Offline queue | Failed upload → SQLite; retry with backoff |
 | 3.9 | Config hot-reload (`SIGHUP`) | Reload channels without process restart |
 | 3.10 | `TelemetryRuntime` + `sim` driver | End-to-end middleware without hardware |
@@ -181,11 +151,6 @@ available again; Phase 3 proceeds without it. Smoke guide remains
 - [x] Simulated network failure → samples persist in SQLite → succeed on retry
 - [x] `SIGHUP` / scheduler reconfigure reloads a changed `sample_rate_hz`
 - [x] Sim driver → runtime → mock HTTP (and offline retry) integration tests
-- [ ] ≥ 90 % line coverage on `bossa_telemetry` and `bossa_sync` (follow-up)
-
-### Estimated scope
-
-~30 files. SQLite and libcurl added as dependencies.
 
 ---
 
@@ -194,7 +159,7 @@ available again; Phase 3 proceeds without it. Smoke guide remains
 **Goal:** Accept batched telemetry from edge nodes into a **BOSSA-owned**
 Cloudflare Worker + D1 (SQLite) database.
 
-**Decision (July 2026):** Remote store is **SQLite only** via D1. The edge upload
+**Architecture:** Remote store is **SQLite only** via D1. The edge upload
 contract (`POST /api/v1/telemetry`) is unchanged; Phase 4 implements the Worker
 and D1 schema.
 
@@ -294,14 +259,12 @@ starts until the previous phase acceptance criteria are met.
 
 ---
 
-## Immediate Next Steps (Phase 3)
+## Immediate Next Steps (Phase 4)
 
-Design and implementation plan: [phase-3-telemetry-pipeline.md](phase-3-telemetry-pipeline.md).
-
-1. Branch: `cursor/phase-3-telemetry-pipeline-ae3a`
-2. Deliver items 3.1–3.9 (GTest; no Pi required)
-3. Leave Phase 2 Pi smoke as a follow-up when hardware is available
-4. Phase 4: BOSSA Cloudflare Worker + D1 ingress (SQLite only)
+1. Create Cloudflare Worker in `workers/` implementing `POST /api/v1/telemetry`.
+2. Define Cloudflare D1 schema migrations for `edge_nodes` and `telemetry_points`.
+3. Add health endpoints `/api/v1/health` and `/api/v1/health/ready`.
+4. Validate idempotent batch ingress with edge integration tests.
 
 ---
 

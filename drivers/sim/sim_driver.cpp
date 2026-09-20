@@ -25,7 +25,8 @@ void SimDriver::configure(const nlohmann::json &parameters) {
     if (parameters.contains("unit") && parameters["unit"].is_string()) {
         unit_ = parameters["unit"].get<std::string>();
     }
-    if (parameters.contains("base_value") && parameters["base_value"].is_number()) {
+    if (parameters.contains("base_value") &&
+        parameters["base_value"].is_number()) {
         base_value_ = parameters["base_value"].get<double>();
     }
     if (parameters.contains("step") && parameters["step"].is_number()) {

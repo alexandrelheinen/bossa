@@ -9,7 +9,6 @@
 #include <fstream>
 #include <string>
 
-#include <fcntl.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -93,7 +92,7 @@ ProcessResult run_bossa_foreground(const std::string &binary_path,
 } // namespace
 
 #ifndef BOSSA_DAEMON_BINARY
-#define BOSSA_DAEMON_BINARY "bossa"
+#define BOSSA_DAEMON_BINARY "bossa-daemon"
 #endif
 
 // Phase 1 acceptance — invalid YAML exits 1 and surfaces config error output.

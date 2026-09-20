@@ -6,7 +6,6 @@
 #include "bme280_driver.hpp"
 
 #include <chrono>
-#include <cstring>
 #include <stdexcept>
 
 #include "bossa/drivers/registry.hpp"
@@ -50,8 +49,10 @@ void Bme280Driver::configure(const nlohmann::json &parameters) {
 
     const std::string bus_path = parameters["bus"].get<std::string>();
     if (parameters["address"].is_string()) {
-        const std::string address_text = parameters["address"].get<std::string>();
-        address_ = static_cast<std::uint8_t>(std::stoul(address_text, nullptr, 0));
+        const std::string address_text =
+            parameters["address"].get<std::string>();
+        address_ =
+            static_cast<std::uint8_t>(std::stoul(address_text, nullptr, 0));
     } else {
         address_ = static_cast<std::uint8_t>(parameters["address"].get<int>());
     }
@@ -146,7 +147,8 @@ bool Bme280Driver::load_calibration() {
     calibration_.dig_t3 = read_int16_le(&buffer[4]);
     calibration_.dig_h1 = buffer[25];
 
-    const std::array<std::uint8_t, 1> humidity_register{kHumidityCalibStartRegister};
+    const std::array<std::uint8_t, 1> humidity_register{
+        kHumidityCalibStartRegister};
     std::array<std::uint8_t, 7> humidity_buffer{};
     if (!bus_->write_read(address_, humidity_register, humidity_buffer)) {
         return false;
@@ -154,18 +156,19 @@ bool Bme280Driver::load_calibration() {
 
     calibration_.dig_h2 = read_int16_le(&humidity_buffer[0]);
     calibration_.dig_h3 = humidity_buffer[2];
-    calibration_.dig_h4 =
-        static_cast<std::int16_t>((static_cast<std::int16_t>(humidity_buffer[3]) << 4) |
-                                  (humidity_buffer[4] & 0x0F));
-    calibration_.dig_h5 =
-        static_cast<std::int16_t>((static_cast<std::int16_t>(humidity_buffer[5]) << 4) |
-                                  (humidity_buffer[4] >> 4));
+    calibration_.dig_h4 = static_cast<std::int16_t>(
+        (static_cast<std::int16_t>(humidity_buffer[3]) << 4) |
+        (humidity_buffer[4] & 0x0F));
+    calibration_.dig_h5 = static_cast<std::int16_t>(
+        (static_cast<std::int16_t>(humidity_buffer[5]) << 4) |
+        (humidity_buffer[4] >> 4));
     calibration_.dig_h6 = static_cast<std::int8_t>(humidity_buffer[6]);
     return true;
 }
 
 bool Bme280Driver::trigger_measurement() {
-    const std::array<std::uint8_t, 2> humidity_command{kCtrlHumidityRegister, 0x01};
+    const std::array<std::uint8_t, 2> humidity_command{kCtrlHumidityRegister,
+                                                       0x01};
     if (!bus_->write(address_, humidity_command)) {
         return false;
     }
@@ -196,15 +199,18 @@ bool Bme280Driver::read_raw(std::int32_t *raw_temperature,
     return true;
 }
 
-float Bme280Driver::compensate_temperature(std::int32_t raw_temperature,
-                                           std::int32_t *fine_temperature) const {
+float Bme280Driver::compensate_temperature(
+    std::int32_t raw_temperature, std::int32_t *fine_temperature) const {
     const std::int32_t var1 =
-        (((raw_temperature >> 3) - (static_cast<std::int32_t>(calibration_.dig_t1) << 1)) *
+        (((raw_temperature >> 3) -
+          (static_cast<std::int32_t>(calibration_.dig_t1) << 1)) *
          static_cast<std::int32_t>(calibration_.dig_t2)) >>
         11;
     const std::int32_t var2 =
-        (((((raw_temperature >> 4) - static_cast<std::int32_t>(calibration_.dig_t1)) *
-           ((raw_temperature >> 4) - static_cast<std::int32_t>(calibration_.dig_t1))) >>
+        (((((raw_temperature >> 4) -
+            static_cast<std::int32_t>(calibration_.dig_t1)) *
+           ((raw_temperature >> 4) -
+            static_cast<std::int32_t>(calibration_.dig_t1))) >>
           12) *
          static_cast<std::int32_t>(calibration_.dig_t3)) >>
         14;

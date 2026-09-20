@@ -6,9 +6,7 @@
 #pragma once
 
 #include <cstdint>
-#include <optional>
 #include <unordered_map>
-#include <vector>
 
 #include "bossa/io/gpio_controller.hpp"
 

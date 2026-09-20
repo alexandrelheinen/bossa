@@ -22,3 +22,7 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# Agents
+.claude/
+.claude/worktrees/
