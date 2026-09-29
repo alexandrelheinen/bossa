@@ -1,0 +1,8 @@
+name = "bossa-worker"
+main = "src/index.ts"
+compatibility_date = "2024-02-23"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "bossa_d1"
+database_id = "local-bossa-d1-id"

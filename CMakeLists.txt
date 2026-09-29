@@ -112,6 +112,9 @@ target_link_libraries(bossa_sync
 set(BOSSA_DRIVERS_SOURCES
     src/drivers/registry.cpp
     drivers/bme280/bme280_driver.cpp
+    drivers/fake-bme280/fake_bme280_driver.cpp
+    drivers/fake-mpu6050/fake_mpu6050_driver.cpp
+    drivers/fake-tsl2561/fake_tsl2561_driver.cpp
     drivers/sim/sim_driver.cpp)
 
 add_library(bossa_drivers STATIC ${BOSSA_DRIVERS_SOURCES})
@@ -119,6 +122,9 @@ target_include_directories(bossa_drivers
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/drivers/bme280
+        ${CMAKE_CURRENT_SOURCE_DIR}/drivers/fake-bme280
+        ${CMAKE_CURRENT_SOURCE_DIR}/drivers/fake-mpu6050
+        ${CMAKE_CURRENT_SOURCE_DIR}/drivers/fake-tsl2561
         ${CMAKE_CURRENT_SOURCE_DIR}/drivers/sim)
 target_link_libraries(bossa_drivers
     PUBLIC
@@ -176,6 +182,9 @@ if(NOT CMAKE_CROSSCOMPILING)
       PRIVATE
           ${CMAKE_CURRENT_SOURCE_DIR}/tests/mocks
           ${CMAKE_CURRENT_SOURCE_DIR}/drivers/bme280
+        ${CMAKE_CURRENT_SOURCE_DIR}/drivers/fake-bme280
+        ${CMAKE_CURRENT_SOURCE_DIR}/drivers/fake-mpu6050
+        ${CMAKE_CURRENT_SOURCE_DIR}/drivers/fake-tsl2561
           ${CMAKE_CURRENT_SOURCE_DIR}/drivers/sim)
 
   target_compile_definitions(bossa_tests
