@@ -1,0 +1,53 @@
+config_version: 1
+
+node:
+  id: ubuntu-sim-01
+  api_key_file: /tmp/bossa-api.key
+
+server:
+  url: http://127.0.0.1:8787
+  upload_timeout_seconds: 30
+  max_batch_size: 500
+
+local_storage:
+  path: /tmp/bossa-telemetry.db
+  max_size_megabytes: 256
+  retention_hours: 72
+
+channels:
+  - id: bme280_group
+    driver: fake-bme280
+    parameters:
+      temperature_channel_id: bme280_temp
+      humidity_channel_id: bme280_hum
+      pressure_channel_id: bme280_press
+    sample_rate_hz: 1.0
+    sync:
+      destinations: [local, remote]
+      remote_interval_seconds: 5
+      priority: normal
+      mode: batch
+
+  - id: mpu6050_group
+    driver: fake-mpu6050
+    parameters:
+      accel_x_id: mpu_accel_x
+      accel_y_id: mpu_accel_y
+      accel_z_id: mpu_accel_z
+    sample_rate_hz: 2.0
+    sync:
+      destinations: [local, remote]
+      remote_interval_seconds: 5
+      priority: normal
+      mode: batch
+
+  - id: tsl2561_lux
+    driver: fake-tsl2561
+    parameters:
+      lux_id: tsl_lux
+    sample_rate_hz: 0.5
+    sync:
+      destinations: [local, remote]
+      remote_interval_seconds: 10
+      priority: low
+      mode: batch
