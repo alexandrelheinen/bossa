@@ -30,9 +30,8 @@ BOSSA’s edge binary shares core libraries with the upload path; remote ingress
 is a Cloudflare Worker writing D1 (not a second SQL engine):
 
 ```mermaid
-flowchart TD
+flowchart LR
     subgraph EDGE["Edge device (Pi 5) — bossa-daemon (systemd)"]
-        direction LR
         CFG["Config<br/>(YAML)"]
         REG["Driver<br/>registry"]
         SCHED["Telemetry<br/>scheduler"]
@@ -40,26 +39,33 @@ flowchart TD
 
         CFG --> REG --> SCHED --> SYNC
 
-        IO["bossa::io<br/>GPIO · I2C · SPI"]
         PLUG["Driver plugins<br/>(.so / static)"]
-        REG --> IO --> PLUG
+        IO["bossa::io<br/>GPIO · I2C · SPI"]
+        PLUG --> IO --> REG
 
         SQLITE[("SQLite (local)<br/>offline cache")]
         SYNC --> SQLITE
     end
 
     subgraph CF["Cloudflare"]
+        direction TB
         WORKER["Worker + D1"]
         D1[("Cloudflare D1<br/>SQLite remote")]
         WORKER --> D1
     end
 
-    SQLITE -- "HTTPS · batch" --> WORKER
+    SYNC -- "HTTPS · batch" --> WORKER
 
-    classDef store fill:#eef6ff,stroke:#4a7fb5,stroke-width:1px;
-    classDef plugin fill:#f6f1ff,stroke:#7b61c9,stroke-width:1px;
-    class SQLITE,D1 store;
-    class PLUG plugin;
+    classDef input  fill:transparent,stroke:#d97706,stroke-width:2px,color:#92400e
+    classDef db     fill:transparent,stroke:#059669,stroke-width:2px,color:#065f46
+    classDef dbcloud fill:transparent,stroke:#0ea5e9,stroke-width:2px,color:#075985
+
+    class CFG,PLUG input
+    class SQLITE db
+    class D1 dbcloud
+
+    style EDGE fill:transparent,stroke:#94a3b8,color:#334155
+    style CF   fill:transparent,stroke:#fb923c,color:#7c2d12
 ```
 
 ### Edge runtime (`bossa-daemon`)
