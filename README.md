@@ -29,32 +29,37 @@ from one or many edge nodes and persists it to D1 (SQLite).
 BOSSA’s edge binary shares core libraries with the upload path; remote ingress
 is a Cloudflare Worker writing D1 (not a second SQL engine):
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           Edge device (Pi 5)                            │
-│                                                                         │
-│  ┌──────────┐   ┌─────────────┐   ┌──────────────┐   ┌──────────────┐  │
-│  │  Config  │──▶│   Driver    │──▶│  Telemetry   │──▶│  Sync engine │  │
-│  │  (YAML)  │   │  registry   │   │  scheduler   │   │  + buffer    │  │
-│  └──────────┘   └──────┬──────┘   └──────────────┘   └──────┬───────┘  │
-│                        │                                      │         │
-│               ┌────────┴────────┐                    ┌─────────┴───────┐ │
-│               │  bossa::io      │                    │ SQLite (local)  │ │
-│               │  GPIO I2C SPI   │                    │ offline cache   │ │
-│               └────────┬────────┘                    └─────────┬───────┘ │
-│                        │                                      │         │
-│               ┌────────┴────────┐                             │ HTTPS    │
-│               │ Driver plugins  │                             │ batch    │
-│               │ (.so / static)  │                             ▼         │
-│               └─────────────────┘                    ┌─────────────────┐  │
-│                                                    │ Cloudflare      │  │
-│  bossa-daemon (systemd)                            │ Worker + D1     │  │
-└────────────────────────────────────────────────────┴────────┬────────┴──┘
-                                                              │
-                                                     ┌────────▼────────┐
-                                                     │  Cloudflare D1  │
-                                                     │ (SQLite remote) │
-                                                     └─────────────────┘
+```mermaid
+flowchart TD
+    subgraph EDGE["Edge device (Pi 5) — bossa-daemon (systemd)"]
+        direction LR
+        CFG["Config<br/>(YAML)"]
+        REG["Driver<br/>registry"]
+        SCHED["Telemetry<br/>scheduler"]
+        SYNC["Sync engine<br/>+ buffer"]
+
+        CFG --> REG --> SCHED --> SYNC
+
+        IO["bossa::io<br/>GPIO · I2C · SPI"]
+        PLUG["Driver plugins<br/>(.so / static)"]
+        REG --> IO --> PLUG
+
+        SQLITE[("SQLite (local)<br/>offline cache")]
+        SYNC --> SQLITE
+    end
+
+    subgraph CF["Cloudflare"]
+        WORKER["Worker + D1"]
+        D1[("Cloudflare D1<br/>SQLite remote")]
+        WORKER --> D1
+    end
+
+    SQLITE -- "HTTPS · batch" --> WORKER
+
+    classDef store fill:#eef6ff,stroke:#4a7fb5,stroke-width:1px;
+    classDef plugin fill:#f6f1ff,stroke:#7b61c9,stroke-width:1px;
+    class SQLITE,D1 store;
+    class PLUG plugin;
 ```
 
 ### Edge runtime (`bossa-daemon`)
